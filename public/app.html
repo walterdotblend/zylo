@@ -1,0 +1,4081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Zylo Cam • Instant Camera & Sharing</title>
+  <meta name="description" content="Record instant videos from your phone and share them instantly with auto-expiration in 6 hours." />
+  <link rel="icon" type="image/png" href="/favicon.png?v=5" />
+  <link rel="apple-touch-icon" href="/favicon.png?v=5" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#ff6d00" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #cameraViewport {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #070110;
+      z-index: 1;
+      transform: scaleX(1);
+      transition: filter 0.10s ease-out, opacity 0.10s ease-out;
+    }
+    #cameraViewport.mirror {
+      transform: scaleX(-1);
+    }
+    #cameraViewport.switching-camera {
+      filter: blur(10px) brightness(1.2);
+      opacity: 0.4;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @-webkit-keyframes spin {
+      0% { -webkit-transform: rotate(0deg); }
+      100% { -webkit-transform: rotate(360deg); }
+    }
+    .upload-spinner {
+      width: 52px;
+      height: 52px;
+      border: 4px solid rgba(255, 109, 0, 0.2);
+      border-top-color: #ff6d00;
+      border-right-color: #ff9100;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite !important;
+      -webkit-animation: spin 0.8s linear infinite !important;
+      margin: 0 auto;
+      will-change: transform;
+    }
+    .hud-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px) 16px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.65) 0%, transparent 22%, transparent 75%, rgba(0,0,0,0.88) 100%);
+    }
+    .hud-overlay * {
+      pointer-events: auto;
+    }
+
+    /* Top Bar - Clean & Essential Controls */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 4px;
+    }
+    .app-brand {
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .app-brand img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 8px rgba(255, 109, 0, 0.45));
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .icon-round-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(20, 6, 36, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .icon-round-btn.active {
+      background: linear-gradient(135deg, #ffa726, #ff6d00);
+      color: #070110;
+      border-color: #ff9100;
+      box-shadow: 0 4px 14px rgba(255, 109, 0, 0.5);
+    }
+    .icon-round-btn:active {
+      transform: scale(0.92);
+      background: rgba(255, 109, 0, 0.35);
+    }
+
+    /* Live Recording Banner */
+    .rec-indicator {
+      display: none;
+      align-self: center;
+      background: rgba(220, 38, 38, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 7px 18px;
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(239, 68, 68, 0.6);
+      animation: pulseRec 1.6s infinite ease-in-out;
+      transition: all 0.3s ease;
+    }
+    .rec-indicator.overtime {
+      background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+      color: #000 !important;
+      font-weight: 900 !important;
+      box-shadow: 0 0 24px rgba(245, 158, 11, 0.9) !important;
+      animation: pulseOvertime 0.8s infinite alternate !important;
+    }
+    @keyframes pulseRec {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(0.97); }
+    }
+    @keyframes pulseOvertime {
+      0% { transform: scale(1); filter: brightness(1); }
+      100% { transform: scale(1.06); filter: brightness(1.25); }
+    }
+    .rec-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #fff;
+    }
+    .rec-indicator.overtime .rec-dot {
+      background: #000;
+    }
+
+    /* Bottom Control Bar - Perfectly Centered Shutter */
+    .bottom-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 6px;
+    }
+    .bottom-controls-row {
+      width: 100%;
+      max-width: 440px;
+      display: grid;
+      grid-template-columns: 70px 1fr 70px;
+      align-items: center;
+      justify-items: center;
+      padding: 0 6px;
+    }
+    .shutter-btn-wrapper {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .shutter-btn-ring {
+      position: absolute;
+      inset: 0;
+      border: 4px solid rgba(255, 255, 255, 0.92);
+      border-radius: 50%;
+      transition: all 0.25s ease;
+    }
+    .shutter-btn-inner {
+      width: 64px;
+      height: 64px;
+      background: #ff3b30;
+      border-radius: 50%;
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 4px 18px rgba(255, 59, 48, 0.55);
+    }
+    .shutter-btn-wrapper.recording .shutter-btn-ring {
+      border-color: #ff3b30;
+      transform: scale(1.1);
+    }
+    .shutter-btn-wrapper.recording .shutter-btn-inner {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #ff3b30;
+      animation: pulseInner 1s infinite alternate;
+    }
+    @keyframes pulseInner {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.12); }
+    }
+    .side-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      width: 64px;
+    }
+    .side-action-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: rgba(30, 10, 50, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      transition: all 0.2s;
+    }
+    .side-action-btn:active .side-action-icon {
+      transform: scale(0.9);
+      background: rgba(255, 109, 0, 0.35);
+    }
+    .footer-hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      letter-spacing: 0.3px;
+      text-align: center;
+    }
+
+    /* Floating Options Drawer & Dialogs */
+    .drawer-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(7, 1, 16, 0.9);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      text-align: center;
+    }
+    .drawer-box {
+      width: 100%;
+      max-width: 400px;
+      background: #140428;
+      border: 1.5px solid #360d62;
+      border-radius: 24px;
+      padding: 22px 18px;
+      box-shadow: 0 16px 50px rgba(0,0,0,0.95);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 92vh;
+      overflow-y: auto;
+    }
+
+    /* Multi-Segment Timeline Trimmer */
+    .trimmer-preview-box {
+      width: 100%;
+      max-height: 380px;
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1.5px solid #360d62;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    }
+    .trimmer-preview-box video {
+      width: 100%;
+      max-height: 380px;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+    /* Non-intrusive Vertical Speed Dial Menu in Top Right */
+    .speed-dial-wrap {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .speed-dial-stack {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none !important;
+      transform: translateY(-8px) scale(0.95);
+      transform-origin: top right;
+      transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.22s;
+      z-index: 100;
+    }
+    .speed-dial-stack:not(.open) * {
+      pointer-events: none !important;
+      visibility: hidden !important;
+    }
+    .speed-dial-stack.open {
+      opacity: 1;
+      visibility: visible !important;
+      pointer-events: auto !important;
+      transform: translateY(0) scale(1);
+    }
+    .speed-dial-stack.open * {
+      visibility: visible !important;
+      pointer-events: auto !important;
+    }
+    .speed-dial-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(18, 4, 34, 0.94);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1.5px solid rgba(255, 109, 0, 0.45);
+      border-radius: 28px;
+      padding: 9px 16px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    .speed-dial-pill:active {
+      transform: scale(0.96);
+      background: rgba(45, 10, 82, 0.98);
+      border-color: #ff6d00;
+    }
+    .speed-dial-icon {
+      font-size: 16px;
+      line-height: 1;
+    }
+    .speed-dial-label {
+      font-size: 12px;
+      color: #f1f5f9;
+      letter-spacing: 0.2px;
+    }
+    .speed-dial-wrap.open #speedDialIcon {
+      transform: rotate(45deg);
+      color: #ff6d00;
+    }
+
+    /* Lossless Style Dual-Handle Timeline Component */
+    .lossless-timeline-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      margin-top: 4px;
+    }
+    .timeline-time-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #94a3b8;
+      font-family: monospace;
+      padding: 0 2px;
+    }
+    .timeline-playhead-badge {
+      color: #00e5ff;
+      font-weight: 800;
+      text-shadow: 0 0 6px rgba(0, 229, 255, 0.4);
+    }
+    .lossless-timeline-track {
+      width: 100%;
+      height: 26px;
+      background: #0d0217;
+      border: 1px solid #360d62;
+      border-radius: 8px;
+      position: relative;
+      overflow: visible;
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85);
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .timeline-slices-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: visible;
+      border-radius: 6px;
+    }
+    .timeline-slice-block {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+      user-select: none;
+      touch-action: none;
+      cursor: grab;
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+    }
+    .slice-handle {
+      width: 36px;
+      top: -5px;
+      bottom: -5px;
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: ew-resize;
+      z-index: 30;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .slice-handle-left {
+      left: -18px;
+    }
+    .slice-handle-right {
+      right: -18px;
+    }
+    .slice-handle-bar {
+      width: 5px;
+      height: 24px;
+      background: #ffffff;
+      border-radius: 3px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .slice-handle:active .slice-handle-bar,
+    .slice-handle.selected .slice-handle-bar {
+      background: #ffa726;
+      width: 7px;
+      height: 28px;
+      box-shadow: 0 0 10px rgba(255, 167, 38, 0.95), 0 0 4px #ffffff;
+    }
+    .slice-handle-tip {
+      position: absolute;
+      bottom: calc(100% + 4px);
+      background: rgba(14, 2, 28, 0.96);
+      border: 1px solid #ffa726;
+      color: #ffa726;
+      font-size: 10px;
+      font-weight: 800;
+      font-family: monospace;
+      padding: 1px 5px;
+      border-radius: 4px;
+      pointer-events: none;
+      white-space: nowrap;
+      display: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.85);
+    }
+    .slice-handle.active-drag .slice-handle-tip {
+      display: block;
+    }
+    .slice-body {
+      flex: 1;
+      height: 100%;
+      margin: 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-size: 10px;
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+      user-select: none;
+    }
+    .slice-body {
+      flex: 1;
+      height: 100%;
+      margin: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 11px;
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+      pointer-events: auto;
+      cursor: grab;
+    }
+    .slice-body:active {
+      cursor: grabbing;
+    }
+    .timeline-playhead-cursor {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      width: 2px;
+      background: #00e5ff;
+      box-shadow: 0 0 8px #00e5ff;
+      pointer-events: none;
+      z-index: 12;
+      transform: translateX(-50%);
+      display: none;
+    }
+    .playhead-knob {
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 10px;
+      height: 10px;
+      background: #00e5ff;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #00e5ff;
+    }
+    .active-slice-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #190530;
+      border: 1px solid #360d62;
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-top: 2px;
+    }
+    .active-slice-tag {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .slice-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .slice-dur-pill {
+      background: rgba(255, 109, 0, 0.2);
+      color: #ffa726;
+      padding: 2px 7px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .slice-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-slice-action {
+      background: #250943;
+      border: 1px solid #5a189a;
+      color: #f1f5f9;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .btn-slice-action:active {
+      background: #421077;
+    }
+    .btn-slice-delete {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+    .btn-add-slice {
+      background: rgba(255, 109, 0, 0.12);
+      border: 1px dashed #ff6d00;
+      color: #ffa726;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 9px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .total-duration-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #360d62;
+      padding-top: 8px;
+      margin-top: 4px;
+    }
+
+    /* Common Buttons */
+    .btn-share-main {
+      background: linear-gradient(135deg, #ffa726, #ff6d00);
+      color: #070110;
+      font-weight: 800;
+      font-size: 14px;
+      border: none;
+      padding: 13px 18px;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 18px rgba(255, 109, 0, 0.4);
+      width: 100%;
+    }
+    .btn-secondary {
+      background: #22083d;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      border: 1px solid #431275;
+      padding: 11px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .url-chip {
+      background: #0d011c;
+      border: 1px solid #360d62;
+      padding: 9px 11px;
+      border-radius: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #ffa726;
+      word-break: break-all;
+    }
+
+    /* Settings Items */
+    .settings-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: #190530;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #3d0d6c;
+      text-align: left;
+    }
+    .settings-label {
+      font-size: 12px;
+      font-weight: 800;
+      color: #ffa726;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .settings-desc {
+      font-size: 11px;
+      color: #94a3b8;
+      line-height: 1.35;
+    }
+    .settings-checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #e2e8f0;
+      cursor: pointer;
+    }
+    .settings-input-num {
+      background: #0b0117;
+      border: 1px solid #ffa726;
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+      width: 64px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      text-align: center;
+      outline: none;
+    }
+
+    /* Camera Full-Sensor Styles */
+    #cameraViewport.full-sensor {
+      object-fit: contain !important;
+      background: #000;
+    }
+
+    /* Mobile WebApp Uniform Banner Container (320x80) */
+    .webapp-ad-wrapper {
+      width: 100%;
+      max-width: 320px;
+      margin: 10px auto;
+      text-align: center;
+    }
+    .webapp-ad-container {
+      position: relative;
+      display: block;
+      width: 100%;
+      height: 80px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #110222;
+      border: 1.5px solid rgba(255, 109, 0, 0.35);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      text-decoration: none;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .webapp-ad-container:active {
+      transform: scale(0.98);
+      border-color: #ffa726;
+    }
+    .webapp-ad-container img,
+    .webapp-ad-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .webapp-ad-badge {
+      position: absolute;
+      top: 5px;
+      right: 7px;
+      background: rgba(0, 0, 0, 0.75);
+      color: #ffa726;
+      font-size: 8px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      pointer-events: none;
+      border: 1px solid rgba(255, 167, 38, 0.3);
+      z-index: 2;
+    }
+    .animated-upload-fill {
+      background: repeating-linear-gradient(
+        45deg,
+        #ff6d00,
+        #ff6d00 14px,
+        #ffa726 14px,
+        #ffa726 28px
+      );
+      background-size: 40px 40px;
+      animation: progressStripes 0.75s linear infinite;
+      box-shadow: 0 0 12px rgba(255, 109, 0, 0.6);
+    }
+    @keyframes progressStripes {
+      0% { background-position: 0 0; }
+      100% { background-position: 40px 0; }
+    }
+    .btn-trimmer-profile {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #cbd5e1;
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+    }
+    .btn-trimmer-profile:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+    .btn-trimmer-profile.active {
+      background: linear-gradient(135deg, #ff6d00, #ff851b);
+      border-color: #ff9100;
+      color: #0c0118;
+      box-shadow: 0 0 10px rgba(255, 109, 0, 0.45);
+    }
+    .btn-trimmer-profile.active.quality-theme {
+      background: linear-gradient(135deg, #a855f7, #c084fc);
+      border-color: #d8b4fe;
+      color: #0c0118;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.45);
+    }
+  </style>
+</head>
+<body>
+  <!-- Floating Animated Discord Session Toast -->
+  <div id="discordSessionBadge" style="display:none; position:fixed; top:env(safe-area-inset-top, 14px); left:50%; transform:translateX(-50%); z-index:9999; background:rgba(88,101,242,0.96); border:1.5px solid #7289da; color:#fff; font-size:12px; font-weight:700; padding:8px 14px; border-radius:24px; backdrop-filter:blur(10px); box-shadow:0 6px 24px rgba(0,0,0,0.6), 0 0 16px rgba(88,101,242,0.5); align-items:center; gap:8px; transition:transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease; max-width:92%;">
+    <span style="font-size:16px;">🎮</span>
+    <div style="display:flex; flex-direction:column; text-align:left;">
+      <span style="font-size:10px; font-weight:900; letter-spacing:0.4px; text-transform:uppercase; color:#e0e7ff;" data-i18n="dc_bot_active_badge">Discord Bot Active</span>
+      <span style="font-size:11px; font-weight:600; color:#fff;" data-i18n="dc_bot_auto_publish_desc">Will automatically publish to your channel</span>
+    </div>
+    <button type="button" onclick="event.stopPropagation(); exitAppDiscordSession();" style="background:#dc2626; border:1px solid #ef4444; color:#fff; font-size:11px; font-weight:800; padding:4px 8px; border-radius:10px; cursor:pointer; line-height:1; margin-left:6px; box-shadow:0 2px 6px rgba(220,38,38,0.5);" data-i18n-title="dc_btn_disconnect" data-i18n="dc_btn_exit" title="Disconnect bot & exit session">
+      Exit
+    </button>
+    <button type="button" onclick="event.stopPropagation(); dismissDiscordSessionToast();" style="background:transparent; border:none; color:#fff; font-size:14px; opacity:0.8; cursor:pointer; padding:2px 4px; line-height:1;" title="Close">✕</button>
+  </div>
+
+  <!-- Floating Microphone Permission Warning Pill -->
+  <div id="micBlockedBanner" style="display:none; position:fixed; top:calc(env(safe-area-inset-top, 14px) + 54px); left:50%; transform:translateX(-50%); z-index:9998; background:rgba(220,38,38,0.92); border:1px solid #ef4444; color:#fff; font-size:11px; font-weight:600; padding:6px 14px; border-radius:20px; backdrop-filter:blur(8px); box-shadow:0 4px 16px rgba(0,0,0,0.5); align-items:center; gap:6px; max-width:90%; pointer-events:none;">
+    <span style="font-size:13px;">⚠️</span>
+    <span id="micBlockedBannerText" data-i18n="mic_blocked_msg">The browser app does not have permission to use the microphone.</span>
+  </div>
+
+  <!-- Fullscreen Camera Viewfinder -->
+  <video id="cameraViewport" class="full-sensor" autoplay playsinline muted></video>
+  <!-- Dedicated Recording Composite Canvas (Attached to DOM for continuous compositor frame invalidation) -->
+  <canvas id="appCompositeCanvas" style="position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; pointer-events:none; z-index:-9999;"></canvas>
+
+  <!-- PWA Install Prompt Card (Prominent, square-shaped, eye-catching) -->
+  <div id="pwaInstallBtn" onclick="installPWA()" style="display:none; position:fixed; top:calc(env(safe-area-inset-top, 0px) + 68px); left:50%; transform:translateX(-50%); width:calc(100% - 32px); max-width:360px; z-index:9999; background:linear-gradient(135deg, rgba(30,10,50,0.96) 0%, rgba(12,2,22,0.98) 100%); border:2px solid #ff6d00; border-radius:16px; padding:12px 14px; box-shadow:0 8px 30px rgba(0,0,0,0.8), 0 0 20px rgba(255,109,0,0.4); backdrop-filter:blur(16px); cursor:pointer;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+      <div style="width:48px; height:48px; border-radius:12px; background:#070110; border:1.5px solid #ff6d00; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden;">
+        <img src="/icon-192.png" alt="Zylo" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='/logo.png'" />
+      </div>
+      <div style="flex:1; text-align:left;">
+        <div style="font-size:14px; font-weight:900; color:#fff; display:flex; align-items:center; gap:6px;">
+          <span data-i18n="pwa_title">Install Zylo App</span>
+          <span style="font-size:9px; background:#ff6d00; color:#000; padding:2px 5px; border-radius:4px; font-weight:800;">PWA</span>
+        </div>
+        <div style="font-size:11px; color:#cbd5e1; margin-top:2px; line-height:1.3;" data-i18n="pwa_desc">
+          Add to home screen for immediate full screen access.
+        </div>
+      </div>
+      <button onclick="event.stopPropagation(); dismissPwaPrompt();" style="background:rgba(255,255,255,0.1); border:none; color:#cbd5e1; font-size:14px; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="Close">✕</button>
+    </div>
+  </div>
+
+  <!-- HUD Interface Overlay -->
+  <div class="hud-overlay">
+    <!-- Top Bar: Logo, Flash, Framing, Privacy Mode, More Options (⋯) -->
+    <div class="top-bar">
+      <!-- Clean Brand Logo -->
+      <a href="/" class="app-brand" title="Zylo Studio">
+        <img src="/logo.png" alt="Zylo" />
+      </a>
+
+      <!-- Visible Primary Actions -->
+      <div class="top-actions">
+        <!-- Framing Mode Toggle: 4:3 Sensor (No crop) vs 9:16 Screen Fill -->
+        <button class="framing-toggle-pill" id="btnFramingToggle" onclick="toggleFramingMode()" title="Cambiar Formato de Imagen: 4:3 Sensor Completo o 9:16 Pantalla Completa" style="background:rgba(12,1,24,0.78); border:1.5px solid rgba(255,109,0,0.6); color:#fff; border-radius:18px; padding:4px 10px; font-size:11px; font-weight:800; display:flex; align-items:center; gap:5px; backdrop-filter:blur(8px); cursor:pointer;">
+          <span id="framingModeIcon">📐</span>
+          <span id="framingModeLabel">4:3 Sensor</span>
+        </button>
+
+        <!-- Flash / Torch -->
+        <button class="icon-round-btn" id="btnTorch" onclick="toggleTorch()" data-i18n-title="title_torch" title="Flash / Linterna">
+          ⚡
+        </button>
+
+        <!-- Extra Privacy Toggle with Eye Icon -->
+        <button class="icon-round-btn" id="btnPrivacyToggle" onclick="togglePrivacyMode()" data-i18n-title="title_privacy" title="Modo Privacidad Extra">
+          <span id="privacyIcon">👁️</span>
+        </button>
+
+        <!-- Non-intrusive Vertical Speed Dial Menu in Top Right -->
+        <div class="speed-dial-wrap" id="speedDialWrap">
+          <button class="icon-round-btn" id="btnTopOptions" onclick="toggleSpeedDial()" data-i18n-title="title_options" title="More Options and Settings">
+            <span id="speedDialIcon" style="font-size:16px; display:inline-block; transition: transform 0.25s ease;">➕</span>
+          </button>
+          
+          <!-- Floating Vertical Stack (expands downward) -->
+          <div class="speed-dial-stack" id="speedDialStack">
+            <button type="button" class="speed-dial-pill" onclick="openAppSettings(); toggleSpeedDial(false);">
+              <span class="speed-dial-icon">⚙️</span>
+              <span class="speed-dial-label" data-i18n="btn_settings">Settings</span>
+            </button>
+            <button type="button" class="speed-dial-pill" id="menuBtnQuality" onclick="toggleQualityProfile()">
+              <span class="speed-dial-icon" id="menuProfileIcon">⚡</span>
+              <span class="speed-dial-label" id="menuProfileLabel">720p Fast (6 min)</span>
+            </button>
+            <button type="button" class="speed-dial-pill" id="menuBtnMic" onclick="handleMenuMicClick()">
+              <span class="speed-dial-icon" id="menuMicIcon">🎤</span>
+              <span class="speed-dial-label" id="menuMicLabel">Audio Active</span>
+            </button>
+            <button type="button" class="speed-dial-pill" onclick="triggerNativeCameraApp(); toggleSpeedDial(false);">
+              <span class="speed-dial-icon">📸</span>
+              <span class="speed-dial-label" data-i18n="btn_cam_native">System Camera</span>
+            </button>
+            <button type="button" class="speed-dial-pill" id="menuBtnPwa" onclick="installPWA(); toggleSpeedDial(false);">
+              <span class="speed-dial-icon">📲</span>
+              <span class="speed-dial-label" data-i18n="pwa_title">Install Zylo App</span>
+            </button>
+            <button type="button" class="speed-dial-pill" onclick="openAppOnboardingModal(); toggleSpeedDial(false);">
+              <span class="speed-dial-icon">👋</span>
+              <span class="speed-dial-label" data-i18n="btn_welcome">Welcome & Info</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Recording Indicator -->
+    <div class="rec-indicator" id="recIndicator">
+      <div class="rec-dot"></div>
+      <span id="recTimerText">00:00</span>
+      <span style="opacity: 0.75; font-size: 11px;" id="recMaxText">/ 06:00</span>
+    </div>
+
+    <!-- Floating Pinch-to-Zoom Indicator Badge (Positioned at top to avoid blocking camera preview) -->
+    <div id="pinchZoomBadge" style="display:none; position:fixed; top:75px; left:50%; transform:translateX(-50%); z-index:35; background:rgba(12,1,24,0.9); border:1.5px solid #ff6d00; color:#ffa726; font-size:14px; font-weight:800; padding:6px 18px; border-radius:20px; pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,0.7); backdrop-filter:blur(10px); transition:opacity 0.25s ease;">
+      🔍 1.0x
+    </div>
+
+    <!-- Bottom Control Bar: Gallery on Left, Perfectly Centered Record Button, Flip Camera on Right -->
+    <div class="bottom-bar">
+      <div class="bottom-controls-row">
+        <!-- 1. Gallery Video File Upload -->
+        <button class="side-action-btn" onclick="document.getElementById('hiddenMobileInput').click()" data-i18n-title="btn_gallery" title="Upload video from gallery">
+          <div class="side-action-icon">📁</div>
+          <span data-i18n="btn_gallery">Gallery</span>
+        </button>
+        <input type="file" id="hiddenMobileInput" accept="video/*" style="display:none;" onchange="handleFileInput(this.files)" />
+
+        <!-- 2. Centered Shutter Record Button -->
+        <div class="shutter-btn-wrapper" id="shutterBtnWrapper" onclick="toggleRecording()">
+          <div class="shutter-btn-ring"></div>
+          <div class="shutter-btn-inner"></div>
+        </div>
+
+        <!-- 3. Flip Camera Button on Bottom Right with Mini Discord Indicator -->
+        <div style="position:relative; display:flex; flex-direction:column; align-items:center;">
+          <!-- Mini Discord Session Indicator (Appears when toast collapses) -->
+          <button type="button" id="discordMiniPill" onclick="showDiscordSessionToast(true)" style="display:none; position:absolute; bottom:calc(100% + 10px); background:rgba(88,101,242,0.95); border:1.5px solid #7289da; color:#fff; border-radius:18px; padding:4px 10px; font-size:11px; font-weight:800; align-items:center; gap:5px; box-shadow:0 4px 14px rgba(0,0,0,0.6), 0 0 12px rgba(88,101,242,0.7); z-index:30; cursor:pointer; white-space:nowrap;">
+            <span style="font-size:13px;">🎮</span>
+            <span>Discord</span>
+          </button>
+
+          <button class="side-action-btn" onclick="flipCamera()" data-i18n-title="btn_flip_cam" title="Switch Camera (Front / Rear)">
+            <div class="side-action-icon" style="font-size:20px;">🔄</div>
+            <span data-i18n="btn_flip_cam">Camera</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="footer-hint" data-i18n="footer_hint">
+        ⚡ Auto-destruction in 6h • Direct upload on share
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden Native Camera Trigger -->
+  <input type="file" id="nativeCamInput" accept="video/*" capture="camcorder" style="display:none;" onchange="handleFileInput(this.files)" />
+
+  <!-- Lossless Style Timeline Editor Drawer -->
+  <div class="drawer-overlay" id="trimmerDrawer">
+    <div class="drawer-box">
+      <!-- Mobile WebApp Uniform Banner Spot 1: Trimmer Header -->
+      <div id="adTrimmerHeader" class="webapp-ad-wrapper" style="display:none;"></div>
+
+      <!-- Simple 3-Button Mode Switcher -->
+      <div style="display:flex; justify-content:center; gap:8px; margin: 4px 0 6px 0;">
+        <button type="button" class="btn-trimmer-profile active" id="btnAppToggleLossless" onclick="toggleAppLossless()" style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:7px 4px; font-size:12px; font-weight:800; border-radius:10px; background:rgba(255,109,0,0.2); border:1.5px solid #ff6d00;">
+          <input type="checkbox" id="chkAppLossless" checked tabindex="-1" style="pointer-events:none; accent-color:#ff6d00; margin:0;">
+          <span>✂️</span>
+        </button>
+        <button type="button" class="btn-trimmer-profile active" id="btnAppModeFast" onclick="setAppVideoSessionMode('fast')" style="flex:1; padding:7px 4px; font-size:12px; font-weight:800; border-radius:10px;">
+          ⚡ <span data-i18n="mode_fast">Fast</span>
+        </button>
+        <button type="button" class="btn-trimmer-profile" id="btnAppModeQuality" onclick="setAppVideoSessionMode('quality')" style="flex:1; padding:7px 4px; font-size:12px; font-weight:800; border-radius:10px;">
+          💎 <span data-i18n="mode_quality">Quality</span>
+        </button>
+      </div>
+
+      <div class="trimmer-preview-box">
+        <video id="trimmerVideoPreview" playsinline controls></video>
+      </div>
+
+      <!-- Lossless Controls Wrapper -->
+      <div id="losslessControlsWrap" style="display:flex; flex-direction:column; gap:6px;">
+        <div class="lossless-timeline-container" style="padding:0; margin:0;">
+          <!-- Main Track with Segments and Playhead -->
+          <div class="lossless-timeline-track" id="losslessTrack">
+            <!-- Playhead Indicator -->
+            <div class="timeline-playhead-cursor" id="losslessPlayhead">
+              <div class="playhead-knob"></div>
+            </div>
+            <!-- Slices Layer -->
+            <div class="timeline-slices-layer" id="timelineSlicesLayer"></div>
+          </div>
+
+          <!-- Compact Fine-Adjustment & Duration Row -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button type="button" class="btn-slice-action" onclick="nudgeActiveSegment(-0.5)" title="Retroceder 0.5s" style="padding: 6px 14px; font-size: 11px; font-weight: 800; border-radius: 8px; background: #22083d; border: 1px solid #431275; color: #fff; cursor: pointer;">
+                ⏪ -0.5s
+              </button>
+              <button type="button" class="btn-slice-action" onclick="nudgeActiveSegment(0.5)" title="Avanzar 0.5s" style="padding: 6px 14px; font-size: 11px; font-weight: 800; border-radius: 8px; background: #22083d; border: 1px solid #431275; color: #fff; cursor: pointer;">
+                ⏩ +0.5s
+              </button>
+            </div>
+            <div id="lblTotalTrimDuration" style="color:#e2e8f0; font-weight:800; font-size:12px; font-family:monospace; background:rgba(255,255,255,0.06); padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.12);">
+              00:00 / 06:00
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Creator Link Box (Visible only when Extra Privacy mode is active) -->
+      <div id="confirmCreatorLinkBox" style="display:none; flex-direction:column; gap:4px; background:rgba(255,109,0,0.14); border:1.5px solid #ff6d00; border-radius:12px; padding:8px 10px; text-align:left; margin:4px 0;">
+        <div style="font-size:11px; font-weight:800; color:#ffa726; display:flex; align-items:center; gap:6px;">
+          <span>👑</span> <span data-i18n="creator_link_label">Creator Privileges Link (Unlimited):</span>
+        </div>
+        <div id="confirmCreatorUrlText" style="font-size:10px; color:#38bdf8; word-break:break-all; font-family:monospace; background:#070110; padding:6px 8px; border-radius:6px; user-select:all; cursor:pointer;" onclick="copyConfirmCreatorLink()" title="Click to copy">
+          https://...
+        </div>
+        <div style="font-size:9px; color:#94a3b8;" data-i18n="creator_link_hint">
+          Save this link to view your clip without restrictions or watermarks.
+        </div>
+      </div>
+
+      <!-- Side-by-side Confirm & Discard Action Buttons -->
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button class="btn-secondary" style="flex: 1; border-color:#2a3349; color:#94a3b8; margin: 0; padding: 12px 6px; font-size: 13px;" onclick="cancelTrimmer()">
+          <span data-i18n="trimmer_btn_cancel">🔄 Discard</span>
+        </button>
+        <button class="btn-share-main" id="btnConfirmTrim" style="flex: 2; margin: 0; padding: 12px 10px; font-size: 13px;" onclick="confirmTrimAndUpload()">
+          <span id="btnConfirmIcon">📤</span> <span id="btnConfirmText" data-i18n="trimmer_btn_confirm">Confirm & Share</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Drawer Modal -->
+  <div class="drawer-overlay" id="settingsDrawer">
+    <div class="drawer-box">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="font-size: 16px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px;">
+          <span>⚙️</span> <span data-i18n="settings_title">Zylo Settings</span>
+        </div>
+        <button class="icon-round-btn" style="width:32px; height:32px;" onclick="closeAppSettings()">✕</button>
+      </div>
+
+      <!-- Language Selector -->
+      <div class="settings-item">
+        <div class="settings-label"><span>🌐</span> <span data-i18n="settings_lang">App Language</span></div>
+        <select id="appSettingsLangSelect" onchange="setAppLanguage(this.value)" style="width: 100%; box-sizing: border-box; background: #0b0117; border: 1px solid #ff6d00; color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; outline: none; margin-top: 4px;">
+          <option value="es">Español (ES)</option>
+          <option value="en">English (EN)</option>
+          <option value="pt">Português (PT)</option>
+          <option value="fr">Français (FR)</option>
+          <option value="de">Deutsch (DE)</option>
+          <option value="ja">日本語 (JA)</option>
+        </select>
+      </div>
+
+      <!-- Trimmer Behavior Option -->
+      <div class="settings-item">
+        <div class="settings-label"><span>✂️</span> <span data-i18n="settings_trim_title">Trimmer Editor (Lossless)</span></div>
+        <label class="settings-checkbox-row" style="margin-top: 4px;">
+          <input type="checkbox" id="appAlwaysTrim" />
+          <span data-i18n="settings_always_trim">Always ask to trim before uploading</span>
+        </label>
+        <div class="settings-desc" style="margin-top:2px;" data-i18n="settings_always_trim_desc">
+          By default, trimmer only opens if video exceeds 6 minutes (or 3 min in Quality mode). Enable to trim any clip before sharing.
+        </div>
+      </div>
+
+      <!-- Profile Selector -->
+      <div class="settings-item">
+        <div class="settings-label"><span>⚡</span> <span data-i18n="settings_profile_title">Recording Profile</span></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px;">
+          <button class="btn-secondary" id="settingsBtnFast" onclick="setQualityPresetMode('fast')" style="background:#ff6d00; color:#000; font-weight:800; border:none;">
+            ⚡ Fast (6 min)<br><span style="font-size:9px; opacity:0.85;">720p • 2 Mbps</span>
+          </button>
+          <button class="btn-secondary" id="settingsBtnQuality" onclick="setQualityPresetMode('quality')">
+            💎 Quality (3 min)<br><span style="font-size:9px; opacity:0.85;">720p • 4 Mbps</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Extra Privacy Settings -->
+      <div class="settings-item">
+        <div class="settings-label"><span>👁️</span> <span data-i18n="settings_privacy_title">Extra Privacy Mode</span></div>
+        <div class="settings-desc" style="margin-bottom: 8px;" data-i18n="settings_privacy_desc">
+          Forensic safeguards and access restrictions for confidential links.
+        </div>
+        
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding: 4px 0;">
+          <div>
+            <span style="font-size: 12px; font-weight: 700; color: #fff;" data-i18n="settings_max_views">View limit</span>
+            <div style="font-size: 10px; color: #94a3b8;" data-i18n="settings_views_desc">0 = unlimited views</div>
+          </div>
+          <input type="number" id="appMaxViews" class="settings-input-num" min="0" value="0" />
+        </div>
+
+        <label class="settings-checkbox-row" style="margin-top: 8px;">
+          <input type="checkbox" id="appSingleViewPerDevice" checked onchange="handleAppDeviceToggle('single_dev')" />
+          <span style="font-weight: 700;" data-i18n="settings_single_dev">👤 1 view per device (Single view limit)</span>
+        </label>
+        <div class="settings-desc" style="margin-left: 26px; margin-top: -2px; font-size: 10px;" data-i18n="settings_single_dev_desc">
+          Each person can only watch the video once; reopening or refreshing will be blocked.
+        </div>
+
+        <label class="settings-checkbox-row" style="margin-top: 6px;">
+          <input type="checkbox" id="appUniqueDevices" onchange="handleAppDeviceToggle('unique')" />
+          <span style="font-weight: 700;" data-i18n="settings_unique_dev">👥 Count unique devices only</span>
+        </label>
+        <div class="settings-desc" style="margin-left: 26px; margin-top: -2px; font-size: 10px;" data-i18n="settings_unique_dev_desc">
+          The same recipient reloading will not consume extra views.
+        </div>
+
+        <label class="settings-checkbox-row" style="margin-top: 6px;">
+          <input type="checkbox" id="appLockDevice" onchange="handleAppDeviceToggle('lock')" />
+          <span style="font-weight: 700;" data-i18n="settings_lock_dev">🔒 Lock to first recipient (Device Lock)</span>
+        </label>
+        <div class="settings-desc" style="margin-left: 26px; margin-top: -2px; font-size: 10px;" data-i18n="settings_lock_dev_desc">
+          Only the first device opening the link will have access; blocked for others.
+        </div>
+
+        <label class="settings-checkbox-row" style="margin-top: 6px;">
+          <input type="checkbox" id="appMobileOnly" />
+          <span style="font-weight: 700;" data-i18n="settings_mobile_only">📱 Mobile devices only</span>
+        </label>
+        <div class="settings-desc" style="margin-left: 26px; margin-top: -2px; font-size: 10px;" data-i18n="settings_mobile_only_desc">
+          Blocks desktop browsers to prevent PC screen recorders.
+        </div>
+
+        <label class="settings-checkbox-row" style="margin-top: 6px;">
+          <input type="checkbox" id="appSinglePlayPerVisit" />
+          <span style="font-weight: 700;" data-i18n="settings_single_play">🎬 Single play per visit</span>
+        </label>
+        <div class="settings-desc" style="margin-left: 26px; margin-top: -2px; font-size: 10px;" data-i18n="settings_single_play_desc">
+          On each visit the video cannot be paused, will play straight through to the end, and then locks for that view.
+        </div>
+
+        <label class="settings-checkbox-row" style="margin-top: 8px;">
+          <input type="checkbox" id="appWatermarkMoving" onchange="toggleAppWatermarkSubSettings(this.checked)" />
+          <span style="font-weight: 700;" data-i18n="settings_wm_title">🌊 Floating watermark</span>
+        </label>
+        <div class="settings-desc" style="margin-left: 26px; margin-top: -2px; font-size: 10px;" data-i18n="settings_wm_desc">
+          Overlays continuously moving viewer identifiers to deter screen recordings.
+        </div>
+
+        <div id="appWatermarkSubOptions" style="margin-left: 26px; margin-top: 6px; display: none; flex-direction: column; gap: 6px;">
+          <label class="settings-checkbox-row" style="font-size: 11px;">
+            <input type="checkbox" id="appWmIp" checked />
+            <span data-i18n="settings_wm_ip">Viewer IP address</span>
+          </label>
+          <label class="settings-checkbox-row" style="font-size: 11px;">
+            <input type="checkbox" id="appWmDevice" checked />
+            <span data-i18n="settings_wm_device">Device and browser info</span>
+          </label>
+          <label class="settings-checkbox-row" style="font-size: 11px;">
+            <input type="checkbox" id="appWmCustom" checked onchange="document.getElementById('appCustomWatermarkInput').disabled = !this.checked;" />
+            <span data-i18n="settings_wm_custom">Custom watermark text</span>
+          </label>
+          <input type="text" id="appCustomWatermarkInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-i18n-ph="settings_wm_ph" placeholder="e.g. Confidential, For John, etc." style="width: 100%; box-sizing: border-box; background: #190530; border: 1px solid #4e1882; color: #fff; padding: 7px 10px; border-radius: 8px; font-size: 11px; outline: none;" />
+        </div>
+      </div>
+
+      <!-- Storage Info -->
+      <div class="settings-item">
+        <div class="settings-label"><span>☁️</span> <span data-i18n="settings_storage_title">Ephemeral Storage</span></div>
+        <div class="settings-desc" data-i18n="settings_storage_desc">
+          ✔ All clips strictly auto-destroy 6 hours after creation.<br>
+          ✔ Strict 100 MB per clip limit at high speed.
+        </div>
+      </div>
+
+      <button class="btn-share-main" onclick="closeAppSettings()" data-i18n="settings_save_btn">
+        Save Settings
+      </button>
+    </div>
+  </div>
+
+  <!-- Onboarding / Welcome Modal for WebApp -->
+  <div class="drawer-overlay" id="onboardingModal" style="display: none; z-index: 200;">
+    <div class="drawer-box" style="text-align: left; max-width: 440px;">
+      <!-- Header with Logo and Multi-Language Selector -->
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <img src="/favicon.png?v=5" alt="Zylo" style="width: 38px; height: 38px; border-radius: 10px;" />
+          <div>
+            <h3 style="margin: 0; font-size: 15px; font-weight: 800; color: #fff;" data-i18n="onboard_title">Welcome to Zylo</h3>
+            <p style="margin: 2px 0 0 0; font-size: 10px; color: #cbd5e1;" data-i18n="onboard_subtitle">Ephemeral clip studio with 6-hour auto-destruction.</p>
+          </div>
+        </div>
+        <!-- Multi-language selector dropdown -->
+        <div>
+          <select id="appOnboardLangSelect" onchange="setAppLanguage(this.value)" style="background: #1e053a; color: #fff; border: 1px solid rgba(255, 109, 0, 0.4); padding: 5px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; outline: none;">
+            <option value="es">Español (ES)</option>
+            <option value="en">English (EN)</option>
+            <option value="pt">Português (PT)</option>
+            <option value="fr">Français (FR)</option>
+            <option value="de">Deutsch (DE)</option>
+            <option value="ja">日本語 (JA)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Section: Choose Video Profile -->
+      <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #ffa726; margin-top: 4px;" data-i18n="onboard_col_profiles">
+        1. Choose your Video Profile
+      </div>
+
+      <!-- Fast Option Card -->
+      <div class="onboard-profile-card" id="appOnboardCardFast" onclick="highlightAppOnboardingProfile('fast')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 12px; background: rgba(255, 109, 0, 0.18); border: 2px solid #ff7b00; cursor: pointer; transition: all 0.2s ease;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 22px;">⚡</span>
+          <div>
+            <div style="font-size: 13px; font-weight: 800; color: #fff;" data-i18n="opt_fast_title">Fast Mode (Recommended)</div>
+            <div style="font-size: 10px; color: #cbd5e1; margin-top: 1px;" data-i18n="opt_fast_desc">720p @ 2 Mbps • Instant uploads</div>
+          </div>
+        </div>
+        <span style="background: #ff6d00; color: #0c0118; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 16px; white-space: nowrap;" data-i18n="opt_fast_badge">Max 6 min</span>
+      </div>
+
+      <!-- Quality Option Card -->
+      <div class="onboard-profile-card" id="appOnboardCardQuality" onclick="highlightAppOnboardingProfile('quality')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 12px; background: rgba(168, 85, 247, 0.08); border: 2px solid rgba(168, 85, 247, 0.3); cursor: pointer; transition: all 0.2s ease;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 22px;">💎</span>
+          <div>
+            <div style="font-size: 13px; font-weight: 800; color: #fff;" data-i18n="opt_quality_title">Quality Mode</div>
+            <div style="font-size: 10px; color: #cbd5e1; margin-top: 1px;" data-i18n="opt_quality_desc">720p @ 4 Mbps • Higher image clarity</div>
+          </div>
+        </div>
+        <span style="background: #a855f7; color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 16px; white-space: nowrap;" data-i18n="opt_quality_badge">Max 3 min</span>
+      </div>
+
+      <!-- Section: Extra Privacy Mode Overview -->
+      <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 12px; padding: 12px 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <span style="font-size: 11px; font-weight: 800; color: #c084fc;" data-i18n="onboard_col_privacy">👁️ Extra Privacy Mode</span>
+          <span style="background: rgba(168, 85, 247, 0.2); color: #e9d5ff; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 8px;" data-i18n="onboard_privacy_badge">Optional</span>
+        </div>
+        <p style="font-size: 10px; color: #cbd5e1; margin: 0 0 6px 0;" data-i18n="onboard_privacy_desc">Forensic safeguards for confidential clips:</p>
+        <ul style="margin: 0; padding-left: 14px; font-size: 10px; color: #d8b4fe; line-height: 1.5; display: flex; flex-direction: column; gap: 2px;">
+          <li><strong style="color:#fff;" data-i18n="priv_feat_wm">Watermark:</strong> <span data-i18n="priv_feat_wm_desc">Drifting viewer IP & device over the video.</span></li>
+          <li><strong style="color:#fff;" data-i18n="priv_feat_session">Unique devices limit:</strong> <span data-i18n="priv_feat_session_desc">Counts visits by unique devices only.</span></li>
+        </ul>
+      </div>
+
+      <!-- Confirmation / Done Button -->
+      <button class="btn-share-main" onclick="confirmAppOnboardingModal()">
+        <span>✓</span> <span data-i18n="onboard_btn_ready">Done / Continue</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Uploading Modal Drawer -->
+  <div class="drawer-overlay" id="uploadDrawer">
+    <div class="drawer-box">
+      <div class="upload-spinner"></div>
+      <div style="font-size: 16px; font-weight: 800; color: #fff;" id="uploadTitle" data-i18n="upload_title">
+        ⚡ Uploading instant clip...
+      </div>
+      <div style="font-size: 11px; color: #cbd5e1;" id="uploadSubtitle" data-i18n="upload_desc">
+        Compressing and securing your ephemeral video at high speed.
+      </div>
+      <div style="width:100%; height:8px; background:#250842; border-radius:4px; overflow:hidden; margin-top:6px;">
+        <div id="uploadFill" class="animated-upload-fill" style="width:0%; height:100%; transition:width 0.15s ease;"></div>
+      </div>
+      <div style="font-size: 11px; color: #ffa726; font-weight: 700;" id="uploadPercent">
+        0%
+      </div>
+
+      <!-- Mobile WebApp Uniform Banner Spot 2: Upload Progress -->
+      <div id="adUploadProgress" class="webapp-ad-wrapper" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- Share Ready Drawer -->
+  <div class="drawer-overlay" id="shareDrawer">
+    <div class="drawer-box">
+      <div style="font-size: 36px;">🎉</div>
+      <div style="font-size: 17px; font-weight: 800; color: #fff;" data-i18n="share_title">
+        Video Ready to Share!
+      </div>
+      <div style="font-size: 11px; color: #cbd5e1;" data-i18n="share_desc">
+        The clip is ready and will expire in exactly 6 hours.
+      </div>
+
+      <!-- Discord Auto-Publish Notice -->
+      <div id="discordShareNotice" style="display:none; margin: 4px 0; padding: 8px 12px; background: rgba(88,101,242,0.22); border: 1px solid #5865F2; border-radius: 8px; font-size: 11px; font-weight: 700; color: #a5b4fc; text-align: center;">
+        <span data-i18n="share_dc_posted">🎮 Your clip has been posted automatically to your Discord channel!</span>
+      </div>
+
+      <div class="url-chip" id="readyShareUrlText">https://...</div>
+
+      <!-- Mobile WebApp Uniform Banner Spot 3: Share Drawer -->
+      <div id="adShareDrawer" class="webapp-ad-wrapper" style="display:none;"></div>
+
+      <!-- Native Share Button (1-tap to WhatsApp, Telegram, etc.) -->
+      <button class="btn-share-main" onclick="triggerNativeShare()">
+        <span>🚀</span> <span data-i18n="share_btn_native">Share via Apps</span>
+      </button>
+
+      <button class="btn-secondary" onclick="copyReadyShareUrl()" data-i18n="share_btn_copy">
+        📋 Copy Link
+      </button>
+
+      <button class="btn-secondary" style="border-color:#2a3349; color:#94a3b8;" onclick="resetCameraForAnother()" data-i18n="share_btn_another">
+        📷 Record Another Video
+      </button>
+    </div>
+  </div>
+
+  <!-- System Announcement Modal -->
+  <div id="systemAnnouncementModal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(7,2,15,0.85); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); align-items:center; justify-content:center; padding:16px;">
+    <div style="background:#130524; border:1.5px solid #581c87; border-radius:20px; max-width:440px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,0.8); overflow:hidden; animation:modalPopIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+      <div id="annModalMediaContainer" style="width:100%; max-height:220px; background:#000; overflow:hidden; display:none; align-items:center; justify-content:center;"></div>
+      <div style="padding:20px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; padding:3px 9px; border-radius:20px; background:rgba(168,85,247,0.2); border:1px solid #a855f7; color:#c084fc;">Novedad Oficial</span>
+        </div>
+        <h3 id="annModalTitle" style="font-size:18px; font-weight:800; color:#fff; margin-bottom:10px; line-height:1.3;"></h3>
+        <p id="annModalMessage" style="font-size:13px; color:#cbd5e1; line-height:1.5; white-space:pre-line; max-height:180px; overflow-y:auto; margin-bottom:18px;"></p>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <a id="annModalActionBtn" href="#" target="_blank" style="display:none; flex:1; text-align:center; padding:11px 16px; border-radius:12px; background:linear-gradient(135deg, #a855f7, #7c3aed); color:#fff; font-weight:700; text-decoration:none; font-size:13px; box-shadow:0 4px 15px rgba(168,85,247,0.4);"></a>
+          <button id="annModalCloseBtn" onclick="closeSystemAnnouncementModal()" style="flex:1; padding:11px 16px; border-radius:12px; background:#240a3d; border:1px solid #4c1d95; color:#cbd5e1; font-weight:600; font-size:13px; cursor:pointer;">Entendido</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/i18n.js"></script>
+  <script>
+    // State
+    let currentStream = null;
+    let currentFacing = 'environment';
+    let isTorchOn = false;
+    let isMicMuted = false;
+    let isExtraPrivacy = false;
+    let currentDiscordSession = null;
+    let qualityPreset = 'fast'; // 'fast' (2 Mbps / 6 min) or 'quality' (4 Mbps / 3 min)
+    let isRefreshingCamera = false;
+    
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecording = false;
+    let recordStartTime = 0;
+    let recTimerInterval = null;
+    let lastGeneratedShareUrl = '';
+
+    // Multi-Segment Trimmer State
+    let pendingVideoBlobOrFile = null;
+    let pendingVideoDuration = 0;
+    let maxAllowedTrimSecs = 360;
+    let activeSegments = []; // Array of { id, start, end }
+    let isFlippingCamera = false;
+    let lastValidFrameCanvas = null;
+
+    const cameraVideo = document.getElementById('cameraViewport');
+    const shutterWrapper = document.getElementById('shutterBtnWrapper');
+    const recIndicator = document.getElementById('recIndicator');
+    const recTimerText = document.getElementById('recTimerText');
+    const recMaxText = document.getElementById('recMaxText');
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg error:', err));
+    }
+
+    // PWA Install prompt handling
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      checkPwaPrompt();
+    });
+
+    function checkPwaPrompt() {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      if (isStandalone) {
+        const installBtn = document.getElementById('pwaInstallBtn');
+        if (installBtn) installBtn.style.display = 'none';
+        const menuPwa = document.getElementById('menuBtnPwa');
+        if (menuPwa) menuPwa.style.display = 'none';
+        return;
+      }
+      const installBtn = document.getElementById('pwaInstallBtn');
+      if (installBtn) installBtn.style.display = 'block';
+      const menuPwa = document.getElementById('menuBtnPwa');
+      if (menuPwa) menuPwa.style.display = 'flex';
+    }
+
+    function installPWA() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult && choiceResult.outcome === 'accepted') {
+            dismissPwaPrompt();
+          }
+          deferredPrompt = null;
+        });
+      } else {
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const lang = currentAppLang || 'en';
+        if (isIOS) {
+          const msg = (lang === 'es')
+            ? 'Para instalar Zylo en tu iPhone:\n\n1. Toca el botón "Compartir" (ícono ⎋ en la barra inferior de Safari).\n2. Selecciona "Añadir a pantalla de inicio" ⊞.\n3. Toca "Añadir".'
+            : (lang === 'pt')
+            ? 'Para instalar o Zylo no seu iPhone:\n\n1. Toque no botão "Compartilhar" (ícone ⎋ no Safari).\n2. Selecione "Adicionar à Tela de Início" ⊞.\n3. Toque em "Adicionar".'
+            : (lang === 'fr')
+            ? 'Pour installer Zylo sur votre iPhone :\n\n1. Touchez le bouton "Partager" (icône ⎋ dans Safari).\n2. Sélectionnez "Sur l\'écran d\'accueil" ⊞.\n3. Touchez "Ajouter".'
+            : (lang === 'de')
+            ? 'So installierst du Zylo auf deinem iPhone:\n\n1. Tippe auf "Teilen" (Symbol ⎋ in Safari).\n2. Wähle "Zum Home-Bildschirm" ⊞.\n3. Tippe auf "Hinzufügen".'
+            : (lang === 'ja')
+            ? 'iPhoneにZyloをインストールするには:\n\n1. Safari下部の「共有」ボタン（⎋）をタップします。\n2. 「ホーム画面に追加」⊞ を選択します。\n3. 右上の「追加」をタップします。'
+            : 'To install Zylo on your iPhone:\n\n1. Tap the "Share" button (icon ⎋ in Safari).\n2. Select "Add to Home Screen" ⊞.\n3. Tap "Add".';
+          alert(msg);
+        } else {
+          const msg = (lang === 'es')
+            ? 'Para instalar Zylo en tu dispositivo:\n\n1. Abre las opciones del navegador (botón de 3 puntos ⋮ en la esquina superior o inferior).\n2. Selecciona "Añadir a pantalla de inicio" o "Instalar Aplicación".\n\n¡Listo! Tendrás la aplicación en tu pantalla de inicio en pantalla completa.'
+            : (lang === 'pt')
+            ? 'Para instalar o Zylo no seu dispositivo:\n\n1. Abra o menu do navegador (botão de 3 pontos ⋮).\n2. Selecione "Adicionar à tela inicial" ou "Instalar aplicativo".'
+            : (lang === 'fr')
+            ? 'Pour installer Zylo sur votre appareil :\n\n1. Ouvrez le menu du navigateur (3 points ⋮).\n2. Sélectionnez "Ajouter à l\'écran d\'accueil" ou "Installer l\'application".'
+            : (lang === 'de')
+            ? 'So installierst du Zylo auf deinem Gerät:\n\n1. Öffne das Browsermenü (3 Punkte ⋮).\n2. Wähle "Zum Startbildschirm hinzufügen" oder "App installieren".'
+            : (lang === 'ja')
+            ? '端末にZyloをインストールするには:\n\n1. ブラウザのメニュー（3つの点 ⋮）を開きます。\n2. 「ホーム画面に追加」または「アプリをインストール」を選択します。'
+            : 'To install Zylo on your device:\n\n1. Open your browser menu (3 dots ⋮ button).\n2. Select "Add to Home screen" or "Install App".\n\nDone! You will have the full-screen app on your home screen.';
+          alert(msg);
+        }
+      }
+    }
+
+    function dismissPwaPrompt() {
+      const btn = document.getElementById('pwaInstallBtn');
+      if (btn) btn.style.display = 'none';
+    }
+
+    let isFullSensorMode = true; // Default uncropped sensor view (matches native camera app)
+    let currentZoom = 1.0;
+    let hardwareZoomSupported = false;
+    let minHardwareZoom = 1.0;
+    let maxHardwareZoom = 5.0;
+    let isZoomSliderOpen = false;
+    let selectedCameraDeviceId = null;
+
+    let briefToastTimer = null;
+    function showBriefToast(msg) {
+      let toast = document.getElementById('appBriefToast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'appBriefToast';
+        toast.style.cssText = 'position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:9999; background:rgba(12,1,24,0.92); border:1px solid #ff6d00; color:#fff; font-size:12px; font-weight:700; padding:6px 14px; border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,0.6); pointer-events:none; transition:opacity 0.25s ease; opacity:0; text-align:center; max-width:85%;';
+        document.body.appendChild(toast);
+      }
+      toast.innerText = msg;
+      toast.style.opacity = '1';
+      if (briefToastTimer) clearTimeout(briefToastTimer);
+      briefToastTimer = setTimeout(() => {
+        toast.style.opacity = '0';
+      }, 2500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    function toggleFramingMode() {
+      if (isRecording) return;
+      isFullSensorMode = !isFullSensorMode;
+      cameraVideo.classList.toggle('full-sensor', isFullSensorMode);
+      const icon = document.getElementById('framingModeIcon');
+      const label = document.getElementById('framingModeLabel');
+      if (icon) icon.textContent = isFullSensorMode ? '📐' : '📱';
+      if (label) label.textContent = isFullSensorMode ? '4:3 Sensor' : '9:16 Pantalla';
+      showBriefToast(isFullSensorMode ? '📐 Proporción 4:3 (Sensor Completo sin recorte)' : '📱 Proporción 9:16 (Llenar pantalla de celular)');
+    }
+
+    // ==========================================
+    // Camera Zoom Engine (Independent of Lenses)
+    // Supports 1-finger vertical slide (UP = zoom in, DOWN = zoom out) & 2-finger pinch
+    // ==========================================
+    let currentDigitalZoom = 1.0; // Range: 1.0 to 5.0
+    let currentSmoothedRecZoom = 1.0; // Smooth interpolated zoom for recording loop
+    let pinchBadgeTimeout = null;
+
+    let oneFingerStartY = 0;
+    let oneFingerStartX = 0;
+    let oneFingerStartZoom = 1.0;
+    let isOneFingerZooming = false;
+
+    let initialPinchDistance = 0;
+    let initialPinchZoom = 1.0;
+    let isPinching = false;
+
+    function getTouchDistance(touches) {
+      if (!touches || touches.length < 2) return 0;
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function showPinchBadge(zoom) {
+      const badge = document.getElementById('pinchZoomBadge');
+      if (!badge) return;
+      badge.innerText = `🔍 ${zoom.toFixed(1)}x`;
+      badge.style.display = 'block';
+      badge.style.opacity = '1';
+      if (pinchBadgeTimeout) clearTimeout(pinchBadgeTimeout);
+    }
+
+    function hidePinchBadge() {
+      if (pinchBadgeTimeout) clearTimeout(pinchBadgeTimeout);
+      pinchBadgeTimeout = setTimeout(() => {
+        const badge = document.getElementById('pinchZoomBadge');
+        if (badge) {
+          badge.style.opacity = '0';
+          setTimeout(() => {
+            if (!isPinching && !isOneFingerZooming && badge) badge.style.display = 'none';
+          }, 250);
+        }
+      }, 700);
+    }
+
+    function applyCurrentZoom(val) {
+      currentDigitalZoom = Math.max(1.0, Math.min(5.0, parseFloat(val) || 1.0));
+      updateVideoTransform();
+      showPinchBadge(currentDigitalZoom);
+    }
+
+    function setZoomValue(val) {
+      applyCurrentZoom(val);
+    }
+
+    function updateVideoTransform() {
+      if (!cameraVideo) return;
+      const mirrorStr = (currentFacing === 'user') ? 'scaleX(-1) ' : '';
+      const scaleStr = (currentDigitalZoom > 1.005) ? `scale(${currentDigitalZoom.toFixed(2)})` : '';
+      cameraVideo.style.transform = `${mirrorStr}${scaleStr}`.trim();
+    }
+
+    // Touch listeners: 1-finger vertical slide zoom + 2-finger pinch zoom
+    window.addEventListener('touchstart', (e) => {
+      const target = e.target;
+      if (target.closest('button, .shutter-btn-wrapper, .top-bar, .drawer-overlay, .settings-item, input, select, a')) {
+        return;
+      }
+      const openDrawer = document.querySelector('.drawer-overlay[style*="display: flex"], .drawer-overlay[style*="display: block"]');
+      if (openDrawer) return;
+
+      if (e.touches && e.touches.length === 2) {
+        // 2-Finger Pinch
+        isOneFingerZooming = false;
+        isPinching = true;
+        initialPinchDistance = getTouchDistance(e.touches);
+        initialPinchZoom = currentDigitalZoom;
+      } else if (e.touches && e.touches.length === 1) {
+        // 1-Finger Gesture Preparation for vertical zoom
+        isOneFingerZooming = false;
+        oneFingerStartY = e.touches[0].clientY;
+        oneFingerStartX = e.touches[0].clientX;
+        oneFingerStartZoom = currentDigitalZoom;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (isPinching && e.touches && e.touches.length === 2) {
+        const dist = getTouchDistance(e.touches);
+        if (initialPinchDistance > 10) {
+          const scale = dist / initialPinchDistance;
+          const targetZoom = Math.max(1.0, Math.min(5.0, initialPinchZoom * scale));
+          applyCurrentZoom(targetZoom);
+        }
+      } else if (!isPinching && e.touches && e.touches.length === 1) {
+        const currentY = e.touches[0].clientY;
+        const currentX = e.touches[0].clientX;
+        const dy = oneFingerStartY - currentY; // positive = dragged UP, negative = dragged DOWN
+        const dx = Math.abs(currentX - oneFingerStartX);
+
+        // Activate 1-finger vertical zoom when vertical travel exceeds threshold
+        if (!isOneFingerZooming && Math.abs(dy) > 12 && Math.abs(dy) > dx * 1.2) {
+          isOneFingerZooming = true;
+        }
+
+        if (isOneFingerZooming) {
+          const zoomChange = dy / 210;
+          const targetZoom = Math.max(1.0, Math.min(5.0, oneFingerStartZoom + zoomChange));
+          applyCurrentZoom(targetZoom);
+        }
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      if (!e.touches || e.touches.length === 0) {
+        isPinching = false;
+        isOneFingerZooming = false;
+        hidePinchBadge();
+      } else if (e.touches.length === 1) {
+        isPinching = false;
+      }
+    });
+
+    window.addEventListener('touchcancel', () => {
+      isPinching = false;
+      isOneFingerZooming = false;
+      hidePinchBadge();
+    });
+
+    // ==========================================
+    // Physical Camera Lens Architecture
+    // Buttons in #lensSwitcher are EXCLUSIVELY for switching physical camera lenses
+    // ==========================================
+    let detectedLenses = []; // Array of { id, displayName, type: 'device' | 'hw_zoom', deviceId, zoomLevel }
+    let currentActiveLensId = 'main';
+
+    function isFrontDevice(label, settings) {
+      if (settings && settings.facingMode === 'user') return true;
+      if (settings && settings.facingMode === 'environment') return false;
+      const l = (label || '').toLowerCase();
+      if (!l) return false;
+      if (/front|selfie|user|delantera|anterior|face|facing front/i.test(l)) return true;
+      if (/back|rear|trasera|posterior|world|facing back|environment/i.test(l)) return false;
+      if (/camera(2)?\s*1\b/i.test(l)) return true;
+      if (/camera(2)?\s*0\b/i.test(l)) return false;
+      return false;
+    }
+
+    function isBackDevice(label, settings) {
+      if (settings && settings.facingMode === 'environment') return true;
+      if (settings && settings.facingMode === 'user') return false;
+      const l = (label || '').toLowerCase();
+      if (!l) return true;
+      if (/back|rear|trasera|posterior|world|facing back|environment/i.test(l)) return true;
+      if (/front|selfie|user|delantera|anterior|face|facing front/i.test(l)) return false;
+      if (/camera(2)?\s*0\b/i.test(l)) return true;
+      if (/camera(2)?\s*1\b/i.test(l)) return false;
+      return true;
+    }
+
+    async function findCameraDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter(d => d.kind === 'videoinput');
+        if (videoInputs.length === 0) {
+          return { all: [], allRear: [], mainRear: null, wideRear: null, teleRear: null, front: null };
+        }
+
+        const rearCameras = [];
+        const frontCameras = [];
+
+        videoInputs.forEach((d, idx) => {
+          if (isFrontDevice(d.label)) {
+            frontCameras.push(d);
+          } else if (isBackDevice(d.label)) {
+            rearCameras.push(d);
+          } else {
+            // Android HAL standard: Camera 0 is rear, Camera 1 is front, 2+ are rear aux
+            if (idx === 1) frontCameras.push(d);
+            else rearCameras.push(d);
+          }
+        });
+
+        // 1x Main Rear: prefer sensor without wide/ultra/tele/macro labels
+        let mainRear = rearCameras.find(d => !/wide|ultra|0\.[56]|angular|macro|tele|depth|zoom|camera2\s*[234]/i.test(d.label)) || rearCameras[0] || null;
+
+        // Wide Rear: matching explicit ultra-wide keywords only
+        let wideRear = rearCameras.find(d => /wide|ultra|0\.[56]|angular/i.test(d.label) && d.deviceId !== mainRear?.deviceId) || null;
+        if (!wideRear && rearCameras.length === 2 && !/macro|depth/i.test(rearCameras[1].label)) {
+          wideRear = rearCameras[1];
+        }
+
+        // Tele Rear: ONLY if label EXPLICITLY declares telephoto or periscope (NEVER guess based on camera count)
+        let teleRear = rearCameras.find(d => /tele|telephoto|periscope/i.test(d.label) && d.deviceId !== mainRear?.deviceId && d.deviceId !== wideRear?.deviceId) || null;
+
+        let front = frontCameras[0] || (videoInputs.length > 1 && videoInputs[0] === mainRear ? videoInputs[1] : null);
+
+        return {
+          all: videoInputs,
+          allRear: rearCameras,
+          mainRear,
+          wideRear,
+          teleRear,
+          front
+        };
+      } catch(e) {
+        console.warn('findCameraDevices error:', e);
+        return { all: [], allRear: [], mainRear: null, wideRear: null, teleRear: null, front: null };
+      }
+    }
+
+    // ==========================================
+    // Mobile WebApp Uniform Ads Engine (Session-Persistent)
+    // ==========================================
+    let currentSessionAd = null;
+
+    async function fetchSessionAd() {
+      if (currentSessionAd) return currentSessionAd;
+      try {
+        const lang = currentAppLang || 'en';
+        const res = await fetch(`/api/banners/mobile_webapp?lang=${encodeURIComponent(lang)}`);
+        const data = await res.json();
+        if (data && data.found) {
+          currentSessionAd = data;
+        }
+      } catch(e) {
+        console.warn('Error fetching mobile session ad:', e);
+      }
+      return currentSessionAd;
+    }
+
+    async function displaySessionAdIn(containerId) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const ad = await fetchSessionAd();
+      if (!ad) {
+        container.style.display = 'none';
+        return;
+      }
+      const isVideo = ad.mediaType === 'video' || (ad.mediaUrl && ad.mediaUrl.match(/\.(mp4|webm)($|\?)/i));
+      container.innerHTML = `
+        <a href="/api/banner-click/${encodeURIComponent(ad.id)}" target="_blank" rel="noopener noreferrer" class="webapp-ad-container" title="${escapeHtml(ad.name || 'Patrocinador Zylo')}">
+          <span class="webapp-ad-badge">AD</span>
+          ${isVideo 
+            ? `<video src="${ad.mediaUrl}" autoplay loop muted playsinline></video>`
+            : `<img src="${ad.mediaUrl}" alt="${escapeHtml(ad.name || 'Anuncio')}" />`
+          }
+        </a>
+      `;
+      container.style.display = 'block';
+    }
+
+    function resetSessionAd() {
+      currentSessionAd = null;
+    }
+
+    // Camera Lifecycle & Reliable Physical Sensor Switcher
+    async function startCamera() {
+      if (currentStream) {
+        try {
+          currentStream.getTracks().forEach(t => t.stop());
+        } catch(e) {}
+        currentStream = null;
+        // Small pause allowing mobile OS Camera HAL to release the physical sensor
+        await new Promise(r => setTimeout(r, 60));
+      }
+
+      // Explicitly configure video properties for mobile autoplay compliance
+      if (cameraVideo) {
+        cameraVideo.muted = true;
+        cameraVideo.defaultMuted = true;
+        cameraVideo.playsInline = true;
+        cameraVideo.setAttribute('playsinline', '');
+        cameraVideo.setAttribute('webkit-playsinline', '');
+        cameraVideo.setAttribute('muted', '');
+        cameraVideo.setAttribute('autoplay', '');
+      }
+
+      // Ensure default facing is MAIN REAR camera ('environment')
+      if (!currentFacing) currentFacing = 'environment';
+
+      let stream = null;
+      let acquiredAudio = false;
+      const targetHeight = isFullSensorMode ? 960 : 720;
+
+      // Proactively check browser permission status if query API is available
+      checkMicPermissionStatus();
+
+      // Check if we already have an active live microphone stream
+      const hasLiveMic = appMicStream && appMicStream.getAudioTracks().some(t => t.readyState === 'live');
+      const audioConstraints = (isMicMuted || hasLiveMic) ? false : true;
+
+      // Attempt 1: Unified request (Video + Audio) with ideal facingMode
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: { ideal: currentFacing },
+            width: { ideal: 1280 },
+            height: { ideal: targetHeight },
+            frameRate: { ideal: 30 }
+          },
+          audio: audioConstraints
+        });
+        if (stream && stream.getAudioTracks().length > 0) {
+          acquiredAudio = true;
+          setMicBlockedState(false);
+        }
+      } catch(errUnified) {
+        console.warn('startCamera unified video+audio failed, trying video only:', errUnified);
+      }
+
+      // Attempt 2: Video-only by ideal facingMode
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              facingMode: { ideal: currentFacing },
+              width: { ideal: 1280 },
+              height: { ideal: targetHeight }
+            },
+            audio: false
+          });
+        } catch(errIdeal) {
+          console.warn('startCamera ideal facingMode failed:', errIdeal);
+        }
+      }
+
+      // Attempt 3: by exact facingMode
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              facingMode: { exact: currentFacing },
+              width: { ideal: 1280 },
+              height: { ideal: targetHeight }
+            },
+            audio: false
+          });
+        } catch(errExact) {
+          console.warn('startCamera exact facingMode failed:', errExact);
+        }
+      }
+
+      // Attempt 4: Loose facingMode
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: currentFacing },
+            audio: false
+          });
+        } catch(errFacing) {
+          console.warn('startCamera loose facingMode failed:', errFacing);
+        }
+      }
+
+      // Attempt 5: General fallback (any video input)
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        } catch(errFinal) {
+          console.error('All camera attempts failed:', errFinal);
+          alert('No se pudo acceder a la cámara. Por favor verifica los permisos en tu navegador.');
+          return;
+        }
+      }
+
+      currentStream = stream;
+
+      // If microphone track was acquired in unified call, save to appMicStream
+      if (acquiredAudio && stream.getAudioTracks().length > 0) {
+        appMicStream = new MediaStream(stream.getAudioTracks());
+      }
+
+      let videoTrack = stream.getVideoTracks()[0];
+      let settings = videoTrack && videoTrack.getSettings ? videoTrack.getSettings() : {};
+      let isActuallyFront = (settings.facingMode === 'user') || (currentFacing === 'user' && settings.facingMode !== 'environment') || isFrontDevice(videoTrack?.label, settings);
+
+      currentFacing = isActuallyFront ? 'user' : 'environment';
+
+      if (cameraVideo) {
+        // Direct stream assignment ensures compatibility across iOS Safari & Android Chrome
+        cameraVideo.srcObject = stream;
+        cameraVideo.classList.toggle('mirror', isActuallyFront);
+
+        const tryPlay = () => {
+          if (cameraVideo.paused) {
+            cameraVideo.play().catch(e => console.log('Camera video play caught:', e));
+          }
+        };
+
+        cameraVideo.onloadedmetadata = tryPlay;
+        tryPlay();
+      }
+
+      currentDigitalZoom = 1.0;
+      currentSmoothedRecZoom = 1.0;
+      updateVideoTransform();
+    }
+
+    async function refreshCameraStream() {
+      if (isRecording || isRefreshingCamera) return;
+      isRefreshingCamera = true;
+      try {
+        await startCamera();
+      } catch(e) {
+        console.warn('Error refreshing camera stream:', e);
+      } finally {
+        isRefreshingCamera = false;
+      }
+    }
+
+    // Unfreeze video stream upon returning to app
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshCameraStream();
+      }
+    });
+    window.addEventListener('focus', refreshCameraStream);
+    window.addEventListener('pageshow', refreshCameraStream);
+
+    let recCanvas = null;
+    let recCtx = null;
+    let recAnimId = null;
+    let recAudioCtx = null;
+    let recAudioDest = null;
+    let recAudioSource = null;
+
+    function drawVideoWithCover(ctx, video, dx, dy, dWidth, dHeight, mirror = false) {
+      const vWidth = video.videoWidth || 1280;
+      const vHeight = video.videoHeight || 720;
+      const videoAspect = vWidth / vHeight;
+      const destAspect = dWidth / dHeight;
+
+      let sx = 0, sy = 0, sWidth = vWidth, sHeight = vHeight;
+
+      if (destAspect > videoAspect) {
+        sWidth = vWidth;
+        sHeight = vWidth / destAspect;
+        sx = 0;
+        sy = (vHeight - sHeight) / 2;
+      } else {
+        sHeight = vHeight;
+        sWidth = vHeight * destAspect;
+        sx = (vWidth - sWidth) / 2;
+        sy = 0;
+      }
+
+      ctx.save();
+      if (mirror) {
+        ctx.translate(dx + dWidth, dy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, dWidth, dHeight);
+      } else {
+        ctx.drawImage(video, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+      }
+      ctx.restore();
+    }
+
+    // Absolute Physical Camera Flip: Switches physical sensor without mirror bug, black screen, or audio HAL lockups
+    async function flipCamera() {
+      if (isFlippingCamera) return;
+      isFlippingCamera = true;
+
+      if (cameraVideo) cameraVideo.classList.add('switching-camera');
+
+      const wasTorchActive = isTorchOn;
+      const targetFacing = (currentFacing === 'user') ? 'environment' : 'user';
+
+      // Stop previous video tracks completely so Android Camera HAL frees the sensor cleanly!
+      if (currentStream) {
+        currentStream.getVideoTracks().forEach(t => {
+          try { t.stop(); } catch(e){}
+        });
+      }
+      if (auxRearTorchStream) {
+        try {
+          auxRearTorchStream.getVideoTracks().forEach(t => {
+            try { t.applyConstraints({ advanced: [{ torch: false }] }).catch(()=>{}); } catch(e){}
+            t.stop();
+          });
+        } catch(e){}
+        auxRearTorchStream = null;
+      }
+
+      let newStream = null;
+      const targetHeight = isFullSensorMode ? 960 : 720;
+
+      // Attempt 1: by ideal facingMode with fast constraints for instant HAL sensor negotiation
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: { ideal: targetFacing },
+            width: { ideal: 1280 },
+            height: { ideal: targetHeight },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+      } catch(errIdeal) {
+        console.warn('flipCamera ideal facingMode failed:', errIdeal);
+      }
+
+      // Attempt 2: by exact facingMode
+      if (!newStream) {
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              facingMode: { exact: targetFacing },
+              width: { ideal: 1280 },
+              height: { ideal: targetHeight },
+              frameRate: { ideal: 30 }
+            },
+            audio: false
+          });
+        } catch(errExact) {
+          console.warn('flipCamera exact facingMode failed:', errExact);
+        }
+      }
+
+      // Attempt 3: basic video only fallback
+      if (!newStream) {
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: targetHeight },
+              frameRate: { ideal: 30 }
+            },
+            audio: false
+          });
+        } catch(errBasic) {
+          console.warn('flipCamera basic video failed:', errBasic);
+        }
+      }
+
+      if (!newStream) {
+        isFlippingCamera = false;
+        if (cameraVideo) cameraVideo.classList.remove('switching-camera');
+        showBriefToast('No se pudo cambiar de cámara');
+        await startCamera();
+        return;
+      }
+
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) {
+        isFlippingCamera = false;
+        if (cameraVideo) cameraVideo.classList.remove('switching-camera');
+        showBriefToast('No se encontró video en la nueva cámara');
+        return;
+      }
+
+      currentStream = new MediaStream([newVideoTrack]);
+
+      // Verify physical facing mode of the new track
+      const newSettings = newVideoTrack.getSettings ? newVideoTrack.getSettings() : {};
+      const isActuallyFront = (newSettings.facingMode === 'user') || (targetFacing === 'user' && newSettings.facingMode !== 'environment') || isFrontDevice(newVideoTrack.label, newSettings);
+      currentFacing = isActuallyFront ? 'user' : 'environment';
+
+      cameraVideo.srcObject = currentStream;
+      // CRITICAL: Mirror ONLY if confirmed to be front selfie camera!
+      cameraVideo.classList.toggle('mirror', isActuallyFront);
+
+      try {
+        await cameraVideo.play();
+      } catch(e) {}
+
+      const finalizeFlip = () => {
+        isFlippingCamera = false;
+        if (cameraVideo) cameraVideo.classList.remove('switching-camera');
+      };
+
+      // Seamless transition: remove blur once first frame is decoded
+      if ('requestVideoFrameCallback' in cameraVideo) {
+        cameraVideo.requestVideoFrameCallback(finalizeFlip);
+      } else {
+        setTimeout(finalizeFlip, 80);
+      }
+      setTimeout(finalizeFlip, 400);
+
+      currentDigitalZoom = 1.0;
+      currentSmoothedRecZoom = 1.0;
+      updateVideoTransform();
+
+      // Maintain Torch state across camera flip (even with a momentary flicker during sensor switch)
+      if (wasTorchActive) {
+        isTorchOn = true;
+        const btnTorch = document.getElementById('btnTorch');
+        if (btnTorch) btnTorch.classList.add('active');
+        await applyTorchState(true);
+      }
+
+      showBriefToast(isActuallyFront ? '🤳 Cámara Frontal' : '📷 Cámara Principal');
+    }
+
+    // Discord Session Toast & Mini Collapsed Pill Controls
+    let discordToastTimeout = null;
+    function showDiscordSessionToast(autoCollapse = true) {
+      const badge = document.getElementById('discordSessionBadge');
+      const mini = document.getElementById('discordMiniPill');
+      if (!badge) return;
+      badge.style.display = 'flex';
+      badge.style.transform = 'translateX(-50%) translateY(0)';
+      badge.style.opacity = '1';
+      badge.style.pointerEvents = 'auto';
+
+      if (mini) mini.style.display = 'none';
+
+      if (discordToastTimeout) clearTimeout(discordToastTimeout);
+      if (autoCollapse) {
+        discordToastTimeout = setTimeout(() => {
+          dismissDiscordSessionToast();
+        }, 4500);
+      }
+    }
+
+    function dismissDiscordSessionToast() {
+      const badge = document.getElementById('discordSessionBadge');
+      const mini = document.getElementById('discordMiniPill');
+      if (badge) {
+        badge.style.transform = 'translateX(-50%) translateY(-80px)';
+        badge.style.opacity = '0';
+        badge.style.pointerEvents = 'none';
+      }
+      if (mini && currentDiscordSession) {
+        mini.style.display = 'flex';
+      }
+    }
+
+    function exitAppDiscordSession() {
+      try { sessionStorage.removeItem('mogi_app_discord_session'); } catch(e){}
+      currentDiscordSession = null;
+      const url = new URL(window.location.href);
+      url.searchParams.delete('session');
+      window.location.href = url.pathname + (url.search ? url.search : '');
+    }
+
+    // Torch / Flash System: Hardware torch persistence across camera flips
+    let auxRearTorchStream = null;
+
+    async function toggleTorch() {
+      isTorchOn = !isTorchOn;
+      if (!isTorchOn) {
+        await applyTorchState(false);
+        showBriefToast('Flash apagado');
+      } else {
+        await applyTorchState(true);
+        showBriefToast('⚡ Linterna activada');
+      }
+    }
+
+    async function applyTorchState(desiredOn) {
+      const btnTorch = document.getElementById('btnTorch');
+
+      // Clear any existing auxiliary torch stream
+      if (auxRearTorchStream) {
+        try {
+          const t = auxRearTorchStream.getVideoTracks()[0];
+          if (t) {
+            t.applyConstraints({ advanced: [{ torch: false }] }).catch(()=>{});
+            t.stop();
+          }
+        } catch(e) {}
+        auxRearTorchStream = null;
+      }
+
+      if (!desiredOn) {
+        if (currentStream) {
+          const videoTrack = currentStream.getVideoTracks()[0];
+          if (videoTrack) {
+            try {
+              videoTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(()=>{});
+            } catch(e) {}
+          }
+        }
+        if (btnTorch) btnTorch.classList.remove('active');
+        return;
+      }
+
+      // Desired ON
+      if (btnTorch) btnTorch.classList.add('active');
+
+      const videoTrack = currentStream ? currentStream.getVideoTracks()[0] : null;
+      const capabilities = (videoTrack && videoTrack.getCapabilities) ? videoTrack.getCapabilities() : {};
+
+      // 1. If active sensor has native torch support (typically rear camera)
+      if (capabilities.torch) {
+        try {
+          await videoTrack.applyConstraints({ advanced: [{ torch: true }] });
+          return;
+        } catch(e) {
+          console.warn('Native torch applyConstraints error:', e);
+        }
+      }
+
+      // 2. Selfie / Front camera active (or sensor without direct torch):
+      // Keep rear hardware torch active for illumination
+      try {
+        const camInfo = await findCameraDevices();
+        const rearDeviceId = camInfo.mainRear?.deviceId;
+        const rearConstraints = rearDeviceId 
+          ? { video: { deviceId: { exact: rearDeviceId } }, audio: false }
+          : { video: { facingMode: { ideal: 'environment' } }, audio: false };
+
+        auxRearTorchStream = await navigator.mediaDevices.getUserMedia(rearConstraints);
+        const auxTrack = auxRearTorchStream.getVideoTracks()[0];
+        if (auxTrack) {
+          const auxCaps = auxTrack.getCapabilities ? auxTrack.getCapabilities() : {};
+          if (auxCaps.torch) {
+            await auxTrack.applyConstraints({ advanced: [{ torch: true }] });
+          }
+        }
+      } catch(err) {
+        console.warn('Could not activate auxiliary rear torch:', err);
+      }
+    }
+
+    function disableAllFlash() {
+      isTorchOn = false;
+      applyTorchState(false);
+    }
+
+    let appMicStream = null;
+    let appAudioCtx = null;
+    let appMicSource = null;
+    let appMicSourceStream = null;
+    let appAudioDest = null;
+    let isMicBlocked = false;
+
+    function setMicBlockedState(blocked) {
+      isMicBlocked = blocked;
+      const banner = document.getElementById('micBlockedBanner');
+      const menuMicIcon = document.getElementById('menuMicIcon');
+      const menuMicLabel = document.getElementById('menuMicLabel');
+
+      if (banner) banner.style.display = blocked ? 'flex' : 'none';
+      const d = i18nApp[currentAppLang] || i18nApp.en;
+      if (blocked) {
+        if (menuMicIcon) menuMicIcon.innerText = '⚠️';
+        if (menuMicLabel) menuMicLabel.innerText = d.mic_no_permission || 'No Mic Permission';
+      } else {
+        if (menuMicIcon) menuMicIcon.innerText = isMicMuted ? '🔇' : '🎤';
+        if (menuMicLabel) menuMicLabel.innerText = isMicMuted ? (d.mic_muted_label || 'Audio Muted') : (d.mic_active_label || 'Audio Active');
+      }
+    }
+
+    async function handleMenuMicClick() {
+      if (isMicBlocked) {
+        await retryAcquireMicrophone();
+      } else {
+        toggleAudioMute();
+      }
+    }
+
+    async function checkMicPermissionStatus() {
+      if (navigator.permissions && navigator.permissions.query) {
+        try {
+          const micPerm = await navigator.permissions.query({ name: 'microphone' });
+          if (micPerm.state === 'denied') {
+            setMicBlockedState(true);
+          } else if (micPerm.state === 'granted') {
+            setMicBlockedState(false);
+          }
+          micPerm.onchange = () => {
+            if (micPerm.state === 'denied') {
+              setMicBlockedState(true);
+            } else if (micPerm.state === 'granted') {
+              setMicBlockedState(false);
+              ensureAppAudioGraph();
+            }
+          };
+        } catch(e) {}
+      }
+    }
+
+    async function retryAcquireMicrophone() {
+      try {
+        appMicStream = await navigator.mediaDevices.getUserMedia({ audio: { 
+            echoCancellation: document.getElementById('appChkNoiseSupp')?.checked || false, 
+            noiseSuppression: document.getElementById('appChkNoiseSupp')?.checked || false, 
+            autoGainControl: document.getElementById('appChkNoiseSupp')?.checked || false 
+          } });
+        if (appMicStream && appMicStream.getAudioTracks().length > 0) {
+          setMicBlockedState(false);
+          await ensureAppAudioGraph();
+          const d = i18nApp[currentAppLang] || i18nApp.en;
+          showBriefToast(d.toast_mic_active || '✅ Microphone enabled!');
+          return;
+        }
+      } catch(e) {
+        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+          setMicBlockedState(true);
+        }
+      }
+    }
+
+    async function ensureAppAudioGraph() {
+      if (isMicMuted) return null;
+      try {
+        if (!appAudioCtx || appAudioCtx.state === 'closed') {
+          appAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (appAudioCtx.state === 'suspended') {
+          await appAudioCtx.resume().catch(()=>{});
+        }
+
+        // Priority 1: Acquire dedicated hardware microphone stream if not already active
+        let liveMicTrack = appMicStream ? appMicStream.getAudioTracks().find(t => t.readyState === 'live') : null;
+        if (!liveMicTrack) {
+          try {
+            appMicStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+          } catch (e1) {
+            if (e1.name === 'NotAllowedError' || e1.name === 'PermissionDeniedError') {
+              setMicBlockedState(true);
+            }
+          }
+        }
+
+        if (appMicStream && appMicStream.getAudioTracks().length > 0) {
+          liveMicTrack = appMicStream.getAudioTracks()[0];
+          liveMicTrack.enabled = !isMicMuted;
+          setMicBlockedState(false);
+
+          if (!appAudioDest) {
+            appAudioDest = appAudioCtx.createMediaStreamDestination();
+          }
+
+          if (!appMicSource || appMicSourceStream !== appMicStream) {
+            if (appMicSource) {
+              try { appMicSource.disconnect(); } catch(e){}
+            }
+            appMicSourceStream = appMicStream;
+            appMicSource = appAudioCtx.createMediaStreamSource(appMicStream);
+            appMicSource.connect(appAudioDest);
+
+            // Keep audio engine clock actively ticking in Chromium
+            try {
+              if (!window._appSilentGain) {
+                window._appSilentGain = appAudioCtx.createGain();
+                window._appSilentGain.gain.value = 0;
+                window._appSilentGain.connect(appAudioCtx.destination);
+              }
+              appMicSource.connect(window._appSilentGain);
+            } catch(e) {}
+          }
+
+          const destTrack = appAudioDest.stream.getAudioTracks()[0];
+          if (destTrack) {
+            destTrack.enabled = !isMicMuted;
+            return destTrack;
+          }
+          return liveMicTrack;
+        }
+      } catch (err) {
+        console.warn("Audio acquire notice:", err);
+      }
+      return null;
+    }
+
+    async function initAppMicrophone() {
+      try {
+        const hasLiveMic = appMicStream && appMicStream.getAudioTracks().some(t => t.readyState === 'live');
+        if (!hasLiveMic && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          await ensureAppAudioGraph();
+        }
+      } catch(e){}
+    }
+
+    async function toggleAudioMute() {
+      isMicMuted = !isMicMuted;
+      const menuMicIcon = document.getElementById('menuMicIcon');
+      const menuMicLabel = document.getElementById('menuMicLabel');
+      if (menuMicIcon) menuMicIcon.innerText = isMicMuted ? '🔇' : '🎤';
+      if (menuMicLabel) menuMicLabel.innerText = isMicMuted ? 'Silenciado' : 'Audio Activo';
+
+      // Update native enabled flag directly on microphone tracks
+      if (appMicStream) {
+        appMicStream.getAudioTracks().forEach(t => t.enabled = !isMicMuted);
+      }
+      if (appAudioDest) {
+        appAudioDest.stream.getAudioTracks().forEach(t => t.enabled = !isMicMuted);
+      }
+
+      showBriefToast(isMicMuted ? '🔇 Micrófono silenciado' : '🎤 Micrófono activado');
+    }
+
+    function toggleQualityProfile() {
+      if (isRecording) return;
+      setQualityPresetMode(qualityPreset === 'fast' ? 'quality' : 'fast');
+    }
+
+    function setQualityPresetMode(mode) {
+      qualityPreset = mode;
+      const btnFast = document.getElementById('settingsBtnFast');
+      const btnQual = document.getElementById('settingsBtnQuality');
+      const menuProfileIcon = document.getElementById('menuProfileIcon');
+      const menuProfileLabel = document.getElementById('menuProfileLabel');
+      const menuBtnQuality = document.getElementById('menuBtnQuality');
+      const dict = (typeof i18nApp !== 'undefined' && i18nApp[currentAppLang]) ? i18nApp[currentAppLang] : (typeof i18nApp !== 'undefined' ? i18nApp.en : {});
+
+      if (qualityPreset === 'quality') {
+        recMaxText.innerText = '/ 03:00';
+        maxAllowedTrimSecs = 180;
+        if (btnFast) { btnFast.style.background = '#22083d'; btnFast.style.color = '#fff'; btnFast.style.fontWeight = '700'; }
+        if (btnQual) { btnQual.style.background = '#a855f7'; btnQual.style.color = '#fff'; btnQual.style.fontWeight = '800'; }
+        if (menuProfileIcon) menuProfileIcon.innerText = '💎';
+        if (menuProfileLabel) menuProfileLabel.innerText = dict.menu_profile_qual || '720p Quality (3 min)';
+        if (menuBtnQuality) {
+          menuBtnQuality.style.background = 'rgba(168, 85, 247, 0.22)';
+          menuBtnQuality.style.borderColor = '#a855f7';
+          menuBtnQuality.style.color = '#e9d5ff';
+        }
+      } else {
+        recMaxText.innerText = '/ 06:00';
+        maxAllowedTrimSecs = 360;
+        if (btnFast) { btnFast.style.background = '#ff6d00'; btnFast.style.color = '#000'; btnFast.style.fontWeight = '800'; }
+        if (btnQual) { btnQual.style.background = '#22083d'; btnQual.style.color = '#fff'; btnQual.style.fontWeight = '700'; }
+        if (menuProfileIcon) menuProfileIcon.innerText = '⚡';
+        if (menuProfileLabel) menuProfileLabel.innerText = dict.menu_profile_fast || '720p Fast (6 min)';
+        if (menuBtnQuality) {
+          menuBtnQuality.style.background = 'rgba(255, 109, 0, 0.22)';
+          menuBtnQuality.style.borderColor = '#ff6d00';
+          menuBtnQuality.style.color = '#ffa726';
+        }
+      }
+    }
+
+    function togglePrivacyMode() {
+      isExtraPrivacy = !isExtraPrivacy;
+      const btn = document.getElementById('btnPrivacyToggle');
+      const icon = document.getElementById('privacyIcon');
+      if (btn) btn.classList.toggle('active', isExtraPrivacy);
+      if (icon) icon.innerText = isExtraPrivacy ? '👁️‍🗨️' : '👁️';
+    }
+
+    // Non-intrusive Vertical Speed Dial Menu
+    function toggleSpeedDial(forceState) {
+      const stack = document.getElementById('speedDialStack');
+      const wrap = document.getElementById('speedDialWrap');
+      if (!stack || !wrap) return;
+      const isOpen = stack.classList.contains('open');
+      const shouldOpen = typeof forceState === 'boolean' ? forceState : !isOpen;
+      if (shouldOpen) {
+        stack.classList.add('open');
+        wrap.classList.add('open');
+      } else {
+        stack.classList.remove('open');
+        wrap.classList.remove('open');
+      }
+    }
+
+    function triggerNativeCameraApp() {
+      toggleSpeedDial(false);
+      const input = document.getElementById('nativeCamInput');
+      if (input) input.click();
+    }
+
+    document.addEventListener('click', (e) => {
+      const wrap = document.getElementById('speedDialWrap');
+      if (wrap && wrap.classList.contains('open') && !wrap.contains(e.target)) {
+        toggleSpeedDial(false);
+      }
+    });
+
+    // Settings Drawer
+    
+    function toggleAppNoiseFilter(checked) {
+      try { localStorage.setItem('mogi_app_noise_supp', checked ? '1' : '0'); } catch(e){}
+    }
+
+    function openAppSettings() {
+      const savedNS = localStorage.getItem('mogi_app_noise_supp') === '1';
+      const chkNS = document.getElementById('appChkNoiseSupp');
+      if (chkNS) chkNS.checked = savedNS;
+      const savedLang = localStorage.getItem('mogi_app_lang') || currentAppLang || 'es';
+      const sel = document.getElementById('appSettingsLangSelect');
+      if (sel) sel.value = savedLang;
+      document.getElementById('settingsDrawer').style.display = 'flex';
+    }
+
+    function toggleAppWatermarkSubSettings(enabled) {
+      const box = document.getElementById('appWatermarkSubOptions');
+      if (box) box.style.display = enabled ? 'flex' : 'none';
+    }
+
+    function closeAppSettings() {
+      document.getElementById('settingsDrawer').style.display = 'none';
+      try {
+        localStorage.setItem('mogi_app_always_trim', document.getElementById('appAlwaysTrim')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_max_views', document.getElementById('appMaxViews')?.value || '0');
+        localStorage.setItem('mogi_app_unique_devices', document.getElementById('appUniqueDevices')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_lock_device', document.getElementById('appLockDevice')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_single_session', document.getElementById('appSingleSession')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_single_play', document.getElementById('appSinglePlayPerVisit')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_mobile_only', document.getElementById('appMobileOnly')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_wm_moving', document.getElementById('appWatermarkMoving')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_wm_ip', document.getElementById('appWmIp')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_wm_device', document.getElementById('appWmDevice')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_wm_custom', document.getElementById('appWmCustom')?.checked ? '1' : '0');
+        localStorage.setItem('mogi_app_custom_wm_text', document.getElementById('appCustomWatermarkInput')?.value || '');
+      } catch(e){}
+    }
+
+    function handleAppDeviceToggle(opt) {
+      const chkSingle = document.getElementById('appSingleViewPerDevice');
+      const chkU = document.getElementById('appUniqueDevices');
+      const chkL = document.getElementById('appLockDevice');
+
+      if (opt === 'single_dev' && chkSingle && chkSingle.checked) {
+        if (chkU) chkU.checked = false;
+        if (chkL) chkL.checked = false;
+      } else if (opt === 'unique' && chkU && chkU.checked) {
+        if (chkSingle) chkSingle.checked = false;
+        if (chkL) chkL.checked = false;
+      } else if (opt === 'lock' && chkL && chkL.checked) {
+        if (chkSingle) chkSingle.checked = false;
+        if (chkU) chkU.checked = false;
+      }
+    }
+
+    let recVfcId = null;
+    let recRafId = null;
+
+    // Recording Controls with Continuous Canvas Pipeline and Direct Audio Track
+    async function toggleRecording() {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        await startRecording();
+      }
+    }
+
+    async function startRecording() {
+      if (!currentStream) return;
+      recordedChunks = [];
+
+      // Determine active audio track based on mic mute state
+      let audioTracks = [];
+      if (!isMicMuted) {
+        if (appAudioCtx && appAudioCtx.state === 'suspended') {
+          await appAudioCtx.resume().catch(()=>{});
+        }
+        let liveAudioTrack = await ensureAppAudioGraph();
+        if (!liveAudioTrack || liveAudioTrack.readyState !== 'live') {
+          try {
+            appMicStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
+            liveAudioTrack = await ensureAppAudioGraph();
+          } catch(e) {
+            console.warn("Direct microphone gesture request failed:", e);
+            if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+              setMicBlockedState(true);
+            }
+          }
+        }
+        if (liveAudioTrack && liveAudioTrack.readyState === 'live') {
+          liveAudioTrack.enabled = true;
+          audioTracks = [liveAudioTrack];
+          setMicBlockedState(false);
+          const d = i18nApp[currentAppLang] || i18nApp.en;
+          showBriefToast(d.toast_rec_audio || '🎤 Recording with audio');
+        } else {
+          setMicBlockedState(true);
+          const d = i18nApp[currentAppLang] || i18nApp.en;
+          showBriefToast(d.toast_rec_no_audio || '⚠️ Recording WITHOUT AUDIO: Microphone unavailable');
+        }
+      } else {
+        const d = i18nApp[currentAppLang] || i18nApp.en;
+        showBriefToast(d.toast_rec_muted || '🔇 Recording muted');
+      }
+
+      // Continuous GPU Hardware-Accelerated Compositor (Seamless camera flipping without freezing)
+      const canvas = document.getElementById('appCompositeCanvas') || document.createElement('canvas');
+      canvas.width = 720;
+      canvas.height = 1280;
+      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+
+      isRecording = true;
+
+      function paintRecFrame() {
+        if (!isRecording) return;
+
+        if (cameraVideo && cameraVideo.readyState >= 2) {
+          const curVw = cameraVideo.videoWidth || 720;
+          const curVh = cameraVideo.videoHeight || 1280;
+          if (curVw > 0 && curVh > 0) {
+            const targetAspect = canvas.width / canvas.height;
+            const currentAspect = curVw / curVh;
+            let cropX = 0, cropY = 0, cropWidth = curVw, cropHeight = curVh;
+
+            if (Math.abs(currentAspect - targetAspect) > 0.01) {
+              if (currentAspect > targetAspect) {
+                cropWidth = curVh * targetAspect;
+                cropHeight = curVh;
+                cropX = (curVw - cropWidth) / 2;
+              } else {
+                cropWidth = curVw;
+                cropHeight = curVw / targetAspect;
+                cropY = (curVh - cropHeight) / 2;
+              }
+            }
+
+            ctx.save();
+            if (currentFacing === 'user') {
+              ctx.translate(canvas.width, 0);
+              ctx.scale(-1, 1);
+            }
+            ctx.drawImage(cameraVideo, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+          }
+        }
+
+        if ('requestVideoFrameCallback' in cameraVideo) {
+          recVfcId = cameraVideo.requestVideoFrameCallback(paintRecFrame);
+        } else {
+          recRafId = requestAnimationFrame(paintRecFrame);
+        }
+      }
+
+      paintRecFrame();
+
+      const canvasStream = canvas.captureStream ? canvas.captureStream(30) : canvas.mozCaptureStream(30);
+      const recordStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...audioTracks
+      ]);
+
+      const candidates = [
+        'video/mp4;codecs=avc1.42E01F,mp4a.40.2',
+        'video/mp4;codecs=avc1,mp4a',
+        'video/mp4',
+        'video/webm;codecs=h264,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm'
+      ];
+      let mimeType = '';
+      for (const t of candidates) {
+        if (MediaRecorder.isTypeSupported(t)) {
+          mimeType = t;
+          break;
+        }
+      }
+
+      const bps = (qualityPreset === 'quality') ? 4000000 : 2500000;
+      const recOptions = {
+        videoBitsPerSecond: bps,
+        audioBitsPerSecond: 128000,
+        videoKeyFrameIntervalDuration: 2000,
+        videoKeyFrameIntervalCount: 60
+      };
+      if (mimeType) recOptions.mimeType = mimeType;
+
+      try {
+        mediaRecorder = new MediaRecorder(recordStream, recOptions);
+      } catch(e) {
+        mediaRecorder = new MediaRecorder(recordStream);
+      }
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunks.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        if (recVfcId && 'cancelVideoFrameCallback' in cameraVideo) {
+          cameraVideo.cancelVideoFrameCallback(recVfcId);
+          recVfcId = null;
+        }
+        if (recRafId) {
+          cancelAnimationFrame(recRafId);
+          recRafId = null;
+        }
+        isFlippingCamera = false;
+        const blobType = mediaRecorder.mimeType || 'video/webm';
+        const recordedBlob = new Blob(recordedChunks, { type: blobType });
+        const exactDurationSecs = Math.max(1, Math.round((Date.now() - recordStartTime) / 1000));
+        recordedBlob._knownDuration = exactDurationSecs;
+        recordedBlob._isRecorded = true;
+        recordedBlob._videoWidth = canvas.width || 720;
+        recordedBlob._videoHeight = canvas.height || 1280;
+        processVideoFileForTrimmingOrUpload(recordedBlob);
+      };
+
+      mediaRecorder.start(250);
+      recordStartTime = Date.now();
+
+      shutterWrapper.classList.add('recording');
+      recIndicator.style.display = 'flex';
+      recIndicator.classList.remove('overtime');
+      recTimerText.innerText = '00:00';
+      const framingToggleBtn = document.getElementById('btnFramingToggle');
+      if (framingToggleBtn) framingToggleBtn.style.display = 'none';
+
+      const maxLimit = (qualityPreset === 'quality') ? 180 : 360;
+
+      recTimerInterval = setInterval(() => {
+        const elapsedSecs = Math.max(1, Math.round((Date.now() - recordStartTime) / 1000));
+        const mins = Math.floor(elapsedSecs / 60).toString().padStart(2, '0');
+        const secs = (elapsedSecs % 60).toString().padStart(2, '0');
+
+        if (elapsedSecs > maxLimit) {
+          const overSecs = elapsedSecs - maxLimit;
+          const overM = Math.floor(overSecs / 60).toString().padStart(2, '0');
+          const overS = (overSecs % 60).toString().padStart(2, '0');
+          recIndicator.classList.add('overtime');
+          recTimerText.innerText = `⚠️ ${mins}:${secs} (+${overM}:${overS} RECORTE)`;
+        } else {
+          recIndicator.classList.remove('overtime');
+          recTimerText.innerText = `${mins}:${secs}`;
+        }
+      }, 500);
+    }
+
+    function stopRecording() {
+      if (!isRecording) return;
+      isRecording = false;
+
+      if (recVfcId && 'cancelVideoFrameCallback' in cameraVideo) {
+        cameraVideo.cancelVideoFrameCallback(recVfcId);
+        recVfcId = null;
+      }
+      if (recRafId) {
+        cancelAnimationFrame(recRafId);
+        recRafId = null;
+      }
+
+      clearInterval(recTimerInterval);
+      shutterWrapper.classList.remove('recording');
+      recIndicator.style.display = 'none';
+      const framingToggleBtn = document.getElementById('btnFramingToggle');
+      if (framingToggleBtn) framingToggleBtn.style.display = 'flex';
+
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+    }
+
+    // Handles files from either gallery OR direct phone native camera app
+    function handleFileInput(files) {
+      if (!files || files.length === 0) return;
+      if (files[0].size > 2048 * 1024 * 1024) {
+        alert('El video seleccionado es demasiado grande (máx 2 GB).');
+        return;
+      }
+      processVideoFileForTrimmingOrUpload(files[0]);
+    }
+
+    // Inspect video duration: triggers Trimmer ONLY if > limit, OR if "Always Trim" is enabled in settings
+    function processVideoFileForTrimmingOrUpload(fileOrBlob) {
+      const tempUrl = URL.createObjectURL(fileOrBlob);
+      let resolved = false;
+      let fallbackTimer = null;
+
+      function proceedWithVerifiedDuration(finalDuration) {
+        if (resolved) return;
+        resolved = true;
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
+        const maxSecs = (qualityPreset === 'quality') ? 180 : 360;
+        const isAlwaysTrimEnabled = document.getElementById('appAlwaysTrim') ? document.getElementById('appAlwaysTrim').checked : true;
+        const isImported = !fileOrBlob._isRecorded;
+
+        if (finalDuration > (maxSecs + 1) || isAlwaysTrimEnabled || currentDiscordSession || isImported || fileOrBlob._isRecorded) {
+          openLosslessTrimmer(fileOrBlob, finalDuration, maxSecs, tempUrl);
+        } else {
+          uploadDirectly(fileOrBlob, []);
+        }
+      }
+
+      // If known from recording timer, immediately proceed without waiting for unattached video metadata
+      if (fileOrBlob._knownDuration && fileOrBlob._knownDuration > 0) {
+        proceedWithVerifiedDuration(fileOrBlob._knownDuration);
+        return;
+      }
+
+      // 800ms safety fallback in case Chromium mobile metadata event hangs
+      fallbackTimer = setTimeout(() => {
+        proceedWithVerifiedDuration(fileOrBlob._knownDuration || 0);
+      }, 800);
+
+      const tempVideo = document.createElement('video');
+      tempVideo.preload = 'metadata';
+
+      tempVideo.onloadedmetadata = () => {
+        let duration = tempVideo.duration;
+        if (!isFinite(duration) || isNaN(duration) || duration <= 0) {
+          if (fileOrBlob._knownDuration && fileOrBlob._knownDuration > 0) {
+            duration = fileOrBlob._knownDuration;
+          }
+        }
+
+        if (!isFinite(duration) || isNaN(duration) || duration <= 0) {
+          tempVideo.currentTime = 1e101;
+          tempVideo.ontimeupdate = function() {
+            this.ontimeupdate = null;
+            let actualDuration = tempVideo.duration;
+            if (!isFinite(actualDuration) || isNaN(actualDuration) || actualDuration <= 0) {
+              actualDuration = tempVideo.currentTime;
+            }
+            tempVideo.currentTime = 0;
+            proceedWithVerifiedDuration(actualDuration || fileOrBlob._knownDuration || 0);
+          };
+          return;
+        }
+
+        proceedWithVerifiedDuration(duration);
+      };
+
+      tempVideo.onerror = () => {
+        proceedWithVerifiedDuration(fileOrBlob._knownDuration || 0);
+      };
+
+      tempVideo.src = tempUrl;
+    }
+
+    function generateClientRandomId(len = 7) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
+      let res = '';
+      const cryptoObj = window.crypto || window.msCrypto;
+      if (cryptoObj && cryptoObj.getRandomValues) {
+        const bytes = new Uint8Array(len);
+        cryptoObj.getRandomValues(bytes);
+        for (let i = 0; i < len; i++) {
+          res += chars[bytes[i] % chars.length];
+        }
+      } else {
+        for (let i = 0; i < len; i++) {
+          res += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+      }
+      return res;
+    }
+
+    let pendingMediaId = null;
+    let pendingCreatorKey = null;
+
+    function toggleLosslessControls(checked) {
+      const wrap = document.getElementById('losslessControlsWrap');
+      if (wrap) {
+        wrap.style.display = checked ? 'flex' : 'none';
+      }
+    }
+
+    function copyConfirmCreatorLink() {
+      const txt = document.getElementById('confirmCreatorUrlText')?.innerText?.trim();
+      if (!txt) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(() => {
+          showBriefToast(currentAppLang === 'en' ? '👑 Creator link copied to clipboard!' : '👑 Enlace de Creador copiado');
+        }).catch(() => {
+          showBriefToast(txt);
+        });
+      } else {
+        showBriefToast(txt);
+      }
+    }
+
+    // Lossless Style Interactive Timeline Editor
+    let segmentIdCounter = 1;
+    let activeSegmentId = null;
+    let isDraggingTimeline = false;
+    let dragAction = null; // 'handle-left' | 'handle-right' | 'body'
+    let dragSegId = null;
+    let dragStartX = 0;
+    let dragInitialStart = 0;
+    let dragInitialEnd = 0;
+    let appVideoSessionPreset = 'fast';
+
+    function setAppVideoSessionMode(mode) {
+      appVideoSessionPreset = mode;
+      maxAllowedTrimSecs = (mode === 'quality' ? 180 : 360);
+
+      const btnF = document.getElementById('btnAppModeFast');
+      const btnQ = document.getElementById('btnAppModeQuality');
+      if (btnF && btnQ) {
+        btnF.classList.toggle('active', mode === 'fast');
+        btnQ.classList.toggle('active', mode === 'quality');
+        if (mode === 'quality') btnQ.classList.add('quality-theme');
+        else btnQ.classList.remove('quality-theme');
+      }
+
+      const lblLimit = document.getElementById('trimmerMaxLabel');
+      if (lblLimit) {
+        const mins = Math.round(maxAllowedTrimSecs / 60);
+        const map = {
+          es: `${mins} minutos`, en: `${mins} minutes`, pt: `${mins} minutos`,
+          fr: `${mins} minutes`, de: `${mins} Minuten`, ja: `${mins} 分`
+        };
+        lblLimit.innerText = map[currentAppLang] || map.en;
+      }
+
+      const totalCurrent = activeSegments.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0);
+      if (totalCurrent > maxAllowedTrimSecs) {
+        const excess = totalCurrent - maxAllowedTrimSecs;
+        const lastSeg = activeSegments[activeSegments.length - 1];
+        if (lastSeg) {
+          lastSeg.end = Math.max(lastSeg.start + 0.5, lastSeg.end - excess);
+        }
+      }
+
+      renderTimelineSlices();
+      updateActiveSliceUI();
+      updateTotalTrimDurationBadge();
+    }
+
+    const LOSSLESS_COLORS = [
+      { bg: 'rgba(180, 83, 9, 0.88)', border: '#f59e0b', dot: '#fbbf24' },   // 1. Gold / Bronze (slice 2)
+      { bg: 'rgba(21, 128, 61, 0.88)', border: '#22c55e', dot: '#4ade80' },  // 2. Vibrant Green (slice 3)
+      { bg: 'rgba(2, 132, 199, 0.88)', border: '#0ea5e9', dot: '#38bdf8' },  // 3. Steel Blue (slice 4)
+      { bg: 'rgba(109, 40, 217, 0.88)', border: '#8b5cf6', dot: '#a78bfa' }, // 4. Purple (slice 5)
+      { bg: 'rgba(159, 18, 57, 0.88)', border: '#f43f5e', dot: '#fb7185' }   // 5. Rose / Maroon (slice 7)
+    ];
+
+    function openLosslessTrimmer(fileOrBlob, duration, maxLimit, objectUrl) {
+      const drawer = document.getElementById('trimmerDrawer');
+      if (drawer && drawer.style.display === 'flex' && pendingVideoBlobOrFile === fileOrBlob) {
+        return; // Guard against opening duplicate drawers for the same file
+      }
+
+      pendingVideoBlobOrFile = fileOrBlob;
+      pendingVideoDuration = Math.max(1, duration);
+
+      // Initialize session-specific preset without changing saved preferences
+      appVideoSessionPreset = (typeof qualityPreset !== 'undefined' && qualityPreset) ? qualityPreset : 'fast';
+      maxAllowedTrimSecs = (appVideoSessionPreset === 'quality' ? 180 : 360);
+
+      const btnF = document.getElementById('btnAppModeFast');
+      const btnQ = document.getElementById('btnAppModeQuality');
+      if (btnF && btnQ) {
+        btnF.classList.toggle('active', appVideoSessionPreset === 'fast');
+        btnQ.classList.toggle('active', appVideoSessionPreset === 'quality');
+        if (appVideoSessionPreset === 'quality') btnQ.classList.add('quality-theme');
+        else btnQ.classList.remove('quality-theme');
+      }
+
+      // Pre-generate pendingMediaId & pendingCreatorKey
+      pendingMediaId = generateClientRandomId(7);
+      pendingCreatorKey = generateClientRandomId(12);
+
+      const apiBase = getApiBaseUrl() || window.location.origin;
+      const creatorUrl = `${apiBase}/v/${pendingMediaId}?key=${pendingCreatorKey}`;
+      const creatorBox = document.getElementById('confirmCreatorLinkBox');
+      const creatorUrlEl = document.getElementById('confirmCreatorUrlText');
+      if (creatorBox && creatorUrlEl) {
+        if (isExtraPrivacy) {
+          creatorUrlEl.innerText = creatorUrl;
+          creatorBox.style.display = 'flex';
+        } else {
+          creatorBox.style.display = 'none';
+        }
+      }
+      // Update button text and icon
+      const btnIcon = document.getElementById('btnConfirmIcon');
+      const btnText = document.getElementById('btnConfirmText');
+      if (currentDiscordSession) {
+        if (btnIcon) btnIcon.innerText = '📤';
+        const dcConfirmMap = {
+          es: 'Confirmar y Compartir en Discord',
+          en: 'Confirm & Share to Discord',
+          pt: 'Confirmar e Compartilhar no Discord',
+          fr: 'Confirmer et Partager sur Discord',
+          de: 'Bestätigen und auf Discord teilen',
+          ja: '確定してDiscordに共有'
+        };
+        if (btnText) btnText.innerText = dcConfirmMap[currentAppLang] || dcConfirmMap.en;
+      } else {
+        if (btnIcon) btnIcon.innerText = '✂️';
+        const uploadConfirmMap = {
+          es: 'Confirmar y Subir',
+          en: 'Confirm & Upload',
+          pt: 'Confirmar e Enviar',
+          fr: 'Confirmer et Téléverser',
+          de: 'Bestätigen und Hochladen',
+          ja: '確定してアップロード'
+        };
+        if (btnText) btnText.innerText = uploadConfirmMap[currentAppLang] || uploadConfirmMap.en;
+      }
+
+      document.getElementById('trimmerDrawer').style.display = 'flex';
+      displaySessionAdIn('adTrimmerHeader');
+
+      // Default line: occupies the LAST 6 minutes (or LAST 3 minutes in Quality mode)
+      const segStart = Math.max(0, pendingVideoDuration - maxLimit);
+      const segEnd = pendingVideoDuration;
+
+      segmentIdCounter = 1;
+      activeSegments = [{
+        id: segmentIdCounter++,
+        start: segStart,
+        end: segEnd,
+        colorIdx: 0
+      }];
+      activeSegmentId = activeSegments[0].id;
+
+      const lblStart = document.getElementById('lblTrackStart');
+      if (lblStart) lblStart.innerText = '00:00';
+      const lblEnd = document.getElementById('lblTrackEnd');
+      if (lblEnd) lblEnd.innerText = formatSecondsToMMSS(pendingVideoDuration);
+      const lblLimit = document.getElementById('trimmerMaxLabel');
+      if (lblLimit) {
+        const mins = Math.round(maxLimit / 60);
+        const minWordMap = {
+          es: `${mins} minutos`,
+          en: `${mins} minutes`,
+          pt: `${mins} minutos`,
+          fr: `${mins} minutes`,
+          de: `${mins} Minuten`,
+          ja: `${mins}分`
+        };
+        lblLimit.innerText = minWordMap[currentAppLang] || `${mins} minutes`;
+      }
+
+      renderTimelineSlices();
+      updateActiveSliceUI();
+      updateTotalTrimDurationBadge();
+      updatePlayhead(segStart);
+
+      const vPreview = document.getElementById('trimmerVideoPreview');
+      if (vPreview) {
+        vPreview.muted = false;
+        vPreview.defaultMuted = false;
+        vPreview.volume = 1.0;
+        vPreview.src = objectUrl;
+        vPreview.ontimeupdate = () => {
+          updatePlayhead(vPreview.currentTime);
+        };
+        vPreview.onloadedmetadata = () => {
+          if (vPreview.duration && isFinite(vPreview.duration) && Math.abs(pendingVideoDuration - vPreview.duration) > 0.5) {
+            pendingVideoDuration = vPreview.duration;
+            const endEl = document.getElementById('lblTrackEnd');
+            if (endEl) endEl.innerText = formatSecondsToMMSS(pendingVideoDuration);
+            const newSegStart = Math.max(0, pendingVideoDuration - maxAllowedTrimSecs);
+            activeSegments = [{
+              id: segmentIdCounter++,
+              start: newSegStart,
+              end: pendingVideoDuration,
+              colorIdx: 0
+            }];
+            activeSegmentId = activeSegments[0].id;
+            renderTimelineSlices();
+            updateActiveSliceUI();
+            updateTotalTrimDurationBadge();
+          }
+          try { vPreview.currentTime = (activeSegments[0] ? activeSegments[0].start : 0); } catch(e){}
+        };
+        try {
+          if (vPreview.readyState >= 1) vPreview.currentTime = (activeSegments[0] ? activeSegments[0].start : 0);
+        } catch(e){}
+      }
+
+      // Attach track interaction
+      const track = document.getElementById('losslessTrack');
+      if (track && !track._hasTimelineListeners) {
+        track.addEventListener('mousedown', handleTimelinePointerDown);
+        track.addEventListener('touchstart', handleTimelinePointerDown, { passive: false });
+        track._hasTimelineListeners = true;
+      }
+    }
+
+    let activeSelectedHandle = 'start'; // 'start', 'end', or 'body'
+
+    function setAppSelectedHandle(target) {
+      activeSelectedHandle = target;
+      renderTimelineSlices();
+      updateActiveSliceUI();
+      const seg = activeSegments[0];
+      const v = document.getElementById('trimmerVideoPreview');
+      if (v && seg) {
+        if (target === 'start') v.currentTime = seg.start;
+        else if (target === 'end') v.currentTime = seg.end;
+        else v.currentTime = seg.start;
+        updatePlayhead(v.currentTime);
+      }
+    }
+
+    function renderTimelineSlices() {
+      const layer = document.getElementById('timelineSlicesLayer');
+      if (!layer || pendingVideoDuration <= 0) return;
+      layer.innerHTML = '';
+
+      if (!activeSegments || activeSegments.length === 0) {
+        const segStart = Math.max(0, pendingVideoDuration - maxAllowedTrimSecs);
+        activeSegments = [{ id: 1, start: segStart, end: pendingVideoDuration, colorIdx: 0 }];
+        activeSegmentId = 1;
+      }
+
+      const seg = activeSegments[0];
+      const leftPct = (seg.start / pendingVideoDuration) * 100;
+      const widthPct = Math.max(0.5, ((seg.end - seg.start) / pendingVideoDuration) * 100);
+      const color = LOSSLESS_COLORS[0];
+      const isBodySelected = (activeSelectedHandle === 'body');
+
+      const block = document.createElement('div');
+      block.className = `timeline-slice-block active ${isBodySelected ? 'body-selected' : ''}`;
+      block.setAttribute('data-block-id', seg.id);
+      block.style.left = `${leftPct}%`;
+      block.style.width = `${widthPct}%`;
+      block.style.background = color.bg;
+      block.style.borderColor = isBodySelected ? '#ffa726' : '#ffffff';
+      block.style.zIndex = '10';
+
+      const isLeftSel = (activeSelectedHandle === 'start');
+      const isRightSel = (activeSelectedHandle === 'end');
+
+      block.innerHTML = `
+        <div class="slice-handle slice-handle-left ${isLeftSel ? 'selected' : ''}" data-action="handle-left" data-seg-id="${seg.id}">
+          <div class="slice-handle-tip">${formatSecondsToMMSS(seg.start)}</div>
+          <div class="slice-handle-bar"></div>
+        </div>
+        <div class="slice-body" data-action="body" data-seg-id="${seg.id}">
+          ${formatSecondsToMMSS(seg.end - seg.start)}
+        </div>
+        <div class="slice-handle slice-handle-right ${isRightSel ? 'selected' : ''}" data-action="handle-right" data-seg-id="${seg.id}">
+          <div class="slice-handle-tip">${formatSecondsToMMSS(seg.end)}</div>
+          <div class="slice-handle-bar"></div>
+        </div>
+      `;
+
+      layer.appendChild(block);
+    }
+
+    function updateActiveSliceUI() {
+      const seg = activeSegments[0];
+      const lblRange = document.getElementById('activeSliceRangeLabel');
+      const lblIndicator = document.getElementById('activeHandleIndicator');
+      const btnStart = document.getElementById('btnAppTargetStart');
+      const btnBody = document.getElementById('btnAppTargetBody');
+      const btnEnd = document.getElementById('btnAppTargetEnd');
+
+      if (!seg) return;
+
+      const dur = Math.max(0, seg.end - seg.start);
+      if (lblRange) {
+        lblRange.innerText = `${formatSecondsToMMSS(seg.start)} ── ${formatSecondsToMMSS(seg.end)} (${formatSecondsToMMSS(dur)})`;
+      }
+
+      const isES = (!currentAppLang || currentAppLang === 'es');
+      if (lblIndicator) {
+        if (activeSelectedHandle === 'start') {
+          lblIndicator.innerText = isES ? 'Ajustando: ◀ Inicio' : 'Target: ◀ Start';
+          lblIndicator.style.color = '#ffa726';
+        } else if (activeSelectedHandle === 'end') {
+          lblIndicator.innerText = isES ? 'Ajustando: Fin ▶' : 'Target: End ▶';
+          lblIndicator.style.color = '#ffa726';
+        } else {
+          lblIndicator.innerText = isES ? 'Ajustando: ↔ Ventana completa' : 'Target: ↔ Whole Span';
+          lblIndicator.style.color = '#38bdf8';
+        }
+      }
+
+      if (btnStart) {
+        btnStart.style.background = (activeSelectedHandle === 'start') ? '#ff6d00' : '#22083d';
+        btnStart.style.color = (activeSelectedHandle === 'start') ? '#fff' : '#cbd5e1';
+        btnStart.style.borderColor = (activeSelectedHandle === 'start') ? '#ffa726' : '#431275';
+      }
+      if (btnBody) {
+        btnBody.style.background = (activeSelectedHandle === 'body') ? '#ff6d00' : '#22083d';
+        btnBody.style.color = (activeSelectedHandle === 'body') ? '#fff' : '#cbd5e1';
+        btnBody.style.borderColor = (activeSelectedHandle === 'body') ? '#ffa726' : '#431275';
+      }
+      if (btnEnd) {
+        btnEnd.style.background = (activeSelectedHandle === 'end') ? '#ff6d00' : '#22083d';
+        btnEnd.style.color = (activeSelectedHandle === 'end') ? '#fff' : '#cbd5e1';
+        btnEnd.style.borderColor = (activeSelectedHandle === 'end') ? '#ffa726' : '#431275';
+      }
+    }
+
+    function updateTotalTrimDurationBadge() {
+      const seg = activeSegments[0];
+      const totalSecs = seg ? Math.max(0, seg.end - seg.start) : 0;
+      const badge = document.getElementById('lblTotalTrimDuration');
+      const btnConfirm = document.getElementById('btnConfirmTrim');
+      if (!badge) return;
+
+      const maxWordMap = {
+        es: 'Máx',
+        en: 'Max',
+        pt: 'Máx',
+        fr: 'Max',
+        de: 'Max',
+        ja: '最大'
+      };
+      const exceedWordMap = {
+        es: ' (⚠️ Supera el límite)',
+        en: ' (⚠️ Exceeds limit)',
+        pt: ' (⚠️ Excede o limite)',
+        fr: ' (⚠️ Dépasse la limite)',
+        de: ' (⚠️ Limit überschritten)',
+        ja: ' (⚠️ 上限超過)'
+      };
+
+      const maxPrefix = maxWordMap[currentAppLang] || 'Max';
+      badge.innerText = `${formatSecondsToMMSS(totalSecs)} / ${maxPrefix} ${formatSecondsToMMSS(maxAllowedTrimSecs)}`;
+
+      if (totalSecs > maxAllowedTrimSecs) {
+        badge.style.color = '#ef4444';
+        badge.innerText += (exceedWordMap[currentAppLang] || exceedWordMap.en);
+        if (btnConfirm) {
+          btnConfirm.style.opacity = '0.5';
+          btnConfirm.style.pointerEvents = 'none';
+        }
+      } else if (totalSecs <= 0) {
+        badge.style.color = '#ef4444';
+        if (btnConfirm) {
+          btnConfirm.style.opacity = '0.5';
+          btnConfirm.style.pointerEvents = 'none';
+        }
+      } else {
+        badge.style.color = '#e2e8f0';
+        if (btnConfirm) {
+          btnConfirm.style.opacity = '1';
+          btnConfirm.style.pointerEvents = 'auto';
+        }
+      }
+    }
+
+    function updatePlayhead(time) {
+      const playhead = document.getElementById('losslessPlayhead');
+      const lblHead = document.getElementById('lblPlayheadTime');
+      if (!playhead || pendingVideoDuration <= 0) return;
+      const pct = Math.max(0, Math.min(100, (time / pendingVideoDuration) * 100));
+      playhead.style.left = `${pct}%`;
+      playhead.style.display = 'block';
+      if (lblHead) lblHead.innerText = `▶ ${formatSecondsToMMSS(time)}`;
+    }
+
+    // 1-Touch Immediate Dragging on Mobile without DOM destruction
+    function handleTimelinePointerDown(e) {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const target = e.target.closest('[data-action]');
+      const track = document.getElementById('losslessTrack');
+      if (!track || pendingVideoDuration <= 0) return;
+
+      const seg = activeSegments[0];
+      if (!seg) return;
+
+      if (target) {
+        const action = target.getAttribute('data-action');
+        if (action === 'handle-left') activeSelectedHandle = 'start';
+        else if (action === 'handle-right') activeSelectedHandle = 'end';
+        else if (action === 'body') activeSelectedHandle = 'body';
+
+        isDraggingTimeline = true;
+        dragAction = action;
+        dragSegId = seg.id;
+        dragStartX = clientX;
+        dragInitialStart = seg.start;
+        dragInitialEnd = seg.end;
+
+        // Visual selection updates WITHOUT destroying DOM in pointerdown
+        const block = document.querySelector(`.timeline-slice-block[data-block-id="${seg.id}"]`);
+        if (block) {
+          block.classList.toggle('body-selected', activeSelectedHandle === 'body');
+          block.style.borderColor = (activeSelectedHandle === 'body') ? '#ffa726' : '#ffffff';
+          const leftHandle = block.querySelector('.slice-handle-left');
+          const rightHandle = block.querySelector('.slice-handle-right');
+          if (leftHandle) {
+            leftHandle.classList.toggle('selected', activeSelectedHandle === 'start');
+            if (action === 'handle-left') leftHandle.classList.add('active-drag');
+          }
+          if (rightHandle) {
+            rightHandle.classList.toggle('selected', activeSelectedHandle === 'end');
+            if (action === 'handle-right') rightHandle.classList.add('active-drag');
+          }
+        }
+
+        updateActiveSliceUI();
+        e.stopPropagation();
+        e.preventDefault();
+      } else {
+        const rect = track.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const seekTime = pct * pendingVideoDuration;
+        scheduleAppPreviewSeek(seekTime);
+        updatePlayhead(seekTime);
+      }
+    }
+
+    let pendingAppSeekTime = null;
+    let appSeekRafId = null;
+
+    function scheduleAppPreviewSeek(targetTime) {
+      pendingAppSeekTime = targetTime;
+      if (!appSeekRafId) {
+        appSeekRafId = requestAnimationFrame(() => {
+          appSeekRafId = null;
+          const v = document.getElementById('trimmerVideoPreview');
+          if (v && pendingAppSeekTime !== null && isFinite(pendingAppSeekTime)) {
+            try {
+              if (typeof v.fastSeek === 'function') {
+                v.fastSeek(pendingAppSeekTime);
+              } else {
+                v.currentTime = pendingAppSeekTime;
+              }
+            } catch (e) {
+              try { v.currentTime = pendingAppSeekTime; } catch (err) {}
+            }
+          }
+        });
+      }
+    }
+
+    function handleTimelinePointerMove(e) {
+      if (!isDraggingTimeline || pendingVideoDuration <= 0) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const track = document.getElementById('losslessTrack');
+      if (!track) return;
+      const rect = track.getBoundingClientRect();
+      const deltaSec = ((clientX - dragStartX) / rect.width) * pendingVideoDuration;
+
+      const seg = activeSegments[0];
+      if (!seg) return;
+
+      if (dragAction === 'handle-left') {
+        let newStart = dragInitialStart + deltaSec;
+        newStart = Math.max(0, Math.min(seg.end - 0.5, newStart));
+        if ((seg.end - newStart) > maxAllowedTrimSecs) {
+          newStart = seg.end - maxAllowedTrimSecs;
+        }
+        seg.start = +newStart.toFixed(2);
+        scheduleAppPreviewSeek(seg.start);
+        updatePlayhead(seg.start);
+      } else if (dragAction === 'handle-right') {
+        let newEnd = dragInitialEnd + deltaSec;
+        newEnd = Math.max(seg.start + 0.5, Math.min(pendingVideoDuration, newEnd));
+        if ((newEnd - seg.start) > maxAllowedTrimSecs) {
+          newEnd = seg.start + maxAllowedTrimSecs;
+        }
+        seg.end = +newEnd.toFixed(2);
+        scheduleAppPreviewSeek(seg.end);
+        updatePlayhead(seg.end);
+      } else if (dragAction === 'body') {
+        const dur = dragInitialEnd - dragInitialStart;
+        let newStart = dragInitialStart + deltaSec;
+        newStart = Math.max(0, Math.min(pendingVideoDuration - dur, newStart));
+        seg.start = +newStart.toFixed(2);
+        seg.end = +(newStart + dur).toFixed(2);
+        scheduleAppPreviewSeek(seg.start);
+        updatePlayhead(seg.start);
+      }
+
+      // Mutate the existing DOM element directly so dragging stays 100% fluid
+      const block = document.querySelector(`.timeline-slice-block[data-block-id="${seg.id}"]`);
+      if (block) {
+        const leftPct = (seg.start / pendingVideoDuration) * 100;
+        const widthPct = Math.max(0.5, ((seg.end - seg.start) / pendingVideoDuration) * 100);
+        block.style.left = `${leftPct}%`;
+        block.style.width = `${widthPct}%`;
+        const bodyText = block.querySelector('.slice-body');
+        if (bodyText) bodyText.innerText = formatSecondsToMMSS(seg.end - seg.start);
+        const leftTip = block.querySelector('.slice-handle-left .slice-handle-tip');
+        if (leftTip) leftTip.innerText = formatSecondsToMMSS(seg.start);
+        const rightTip = block.querySelector('.slice-handle-right .slice-handle-tip');
+        if (rightTip) rightTip.innerText = formatSecondsToMMSS(seg.end);
+      }
+
+      updateActiveSliceUI();
+      updateTotalTrimDurationBadge();
+      e.preventDefault();
+    }
+
+    function handleTimelinePointerUp() {
+      if (isDraggingTimeline) {
+        isDraggingTimeline = false;
+        dragAction = null;
+        dragSegId = null;
+        document.querySelectorAll('.slice-handle.active-drag').forEach(h => h.classList.remove('active-drag'));
+        const seg = activeSegments[0];
+        const v = document.getElementById('trimmerVideoPreview');
+        if (v && seg) {
+          const finalTime = (activeSelectedHandle === 'end') ? seg.end : seg.start;
+          try { v.currentTime = finalTime; } catch(e){}
+        }
+        renderTimelineSlices();
+        updateActiveSliceUI();
+        updateTotalTrimDurationBadge();
+      }
+    }
+
+    window.addEventListener('mousemove', handleTimelinePointerMove);
+    window.addEventListener('mouseup', handleTimelinePointerUp);
+    window.addEventListener('touchmove', handleTimelinePointerMove, { passive: false });
+    window.addEventListener('touchend', handleTimelinePointerUp);
+
+    function nudgeActiveSegment(deltaSec) {
+      const seg = activeSegments[0];
+      if (!seg || pendingVideoDuration <= 0) return;
+      const v = document.getElementById('trimmerVideoPreview');
+
+      if (activeSelectedHandle === 'start') {
+        let newStart = seg.start + deltaSec;
+        newStart = Math.max(0, Math.min(seg.end - 0.5, newStart));
+        if ((seg.end - newStart) > maxAllowedTrimSecs) {
+          newStart = seg.end - maxAllowedTrimSecs;
+        }
+        seg.start = +newStart.toFixed(2);
+        if (v) v.currentTime = seg.start;
+        updatePlayhead(seg.start);
+      } else if (activeSelectedHandle === 'end') {
+        let newEnd = seg.end + deltaSec;
+        newEnd = Math.max(seg.start + 0.5, Math.min(pendingVideoDuration, newEnd));
+        if ((newEnd - seg.start) > maxAllowedTrimSecs) {
+          newEnd = seg.start + maxAllowedTrimSecs;
+        }
+        seg.end = +newEnd.toFixed(2);
+        if (v) v.currentTime = seg.end;
+        updatePlayhead(seg.end);
+      } else { // 'body'
+        const dur = seg.end - seg.start;
+        let newStart = seg.start + deltaSec;
+        newStart = Math.max(0, Math.min(pendingVideoDuration - dur, newStart));
+        seg.start = +newStart.toFixed(2);
+        seg.end = +(newStart + dur).toFixed(2);
+        if (v) v.currentTime = seg.start;
+        updatePlayhead(seg.start);
+      }
+
+      renderTimelineSlices();
+      updateActiveSliceUI();
+      updateTotalTrimDurationBadge();
+    }
+
+    function formatSecondsToMMSS(secs) {
+      const m = Math.floor(secs / 60).toString().padStart(2, '0');
+      const s = Math.floor(secs % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    let isAppLosslessEnabled = true;
+    function toggleAppLossless() {
+      isAppLosslessEnabled = !isAppLosslessEnabled;
+      const btn = document.getElementById('btnAppToggleLossless');
+      const chk = document.getElementById('chkAppLossless');
+      if (chk) chk.checked = isAppLosslessEnabled;
+      if (btn) {
+        btn.classList.toggle('active', isAppLosslessEnabled);
+        btn.style.borderStyle = isAppLosslessEnabled ? 'solid' : 'dashed';
+        btn.style.opacity = isAppLosslessEnabled ? '1' : '0.75';
+      }
+      toggleLosslessControls(isAppLosslessEnabled);
+    }
+
+    function confirmTrimAndUpload() {
+      document.getElementById('trimmerDrawer').style.display = 'none';
+      const v = document.getElementById('trimmerVideoPreview');
+      if (v) v.pause();
+
+      const seg = activeSegments && activeSegments[0];
+      if (!seg) return;
+
+      const segStart = +seg.start.toFixed(2);
+      const segEnd = +seg.end.toFixed(2);
+      const src = pendingVideoBlobOrFile;
+      const isFullVideo = (segStart <= 0.05 && segEnd >= (pendingVideoDuration - 0.1) && pendingVideoDuration <= maxAllowedTrimSecs);
+
+      const mediaId = pendingMediaId, cKey = pendingCreatorKey;
+
+      if (!isAppLosslessEnabled) {
+        if (src._isRecorded && src._locallyEncoded) {
+          uploadDirectly(src, [], mediaId, cKey);
+          return;
+        }
+      } else if (isFullVideo && src._isRecorded && src._locallyEncoded) {
+        uploadDirectly(src, [], mediaId, cKey);
+        return;
+      }
+
+      const segmentsPayload = [{ start: segStart, end: segEnd }];
+      const sessionBps = (appVideoSessionPreset === 'quality') ? 4000000 : 2000000;
+
+      const getAppLang = () => (typeof currentAppLang !== 'undefined' && currentAppLang) ? currentAppLang : 'es';
+      const encText = (p) => {
+        const l = getAppLang();
+        if (l === 'en') return `Processing clip locally ${p}%`;
+        if (l === 'pt') return `Processando clipe localmente ${p}%`;
+        if (l === 'fr') return `Traitement local ${p}%`;
+        if (l === 'de') return `Clip lokal verarbeiten ${p}%`;
+        if (l === 'ja') return `ローカル処理中 ${p}%`;
+        return `Procesando clip localmente ${p}%`;
+      };
+
+      document.getElementById('uploadDrawer').style.display = 'flex';
+      displaySessionAdIn('adUploadProgress');
+      const fill = document.getElementById('uploadFill');
+      const percent = document.getElementById('uploadPercent');
+      fill.style.width = '0%';
+      percent.innerText = encText(0);
+
+      window.mogiLocalEncode(src, segmentsPayload, { maxDim: 1280, fps: 30, bitrate: sessionBps, duration: pendingVideoDuration }, (p) => {
+        fill.style.width = `${p}%`;
+        percent.innerText = encText(p);
+      }).then((encoded) => {
+        uploadDirectly(encoded, [], mediaId, cKey);
+      }).catch((err) => {
+        console.error('Local processing failed:', err);
+        document.getElementById('uploadDrawer').style.display = 'none';
+        alert(getAppLang() === 'en' ? 'Could not process video on your device.' : 'No se pudo procesar el video en tu dispositivo.');
+        cancelTrimmer();
+      });
+    }
+
+    function cancelTrimmer() {
+      document.getElementById('trimmerDrawer').style.display = 'none';
+      const v = document.getElementById('trimmerVideoPreview');
+      if (v) {
+        v.pause();
+        v.removeAttribute('src');
+        v.load();
+      }
+      pendingVideoBlobOrFile = null;
+      pendingMediaId = null;
+      pendingCreatorKey = null;
+      resetSessionAd();
+      startCamera();
+    }
+
+    function getApiBaseUrl() {
+      const custom = (localStorage.getItem('mogi_api_base_url') || '').trim();
+      if (custom && !custom.includes('mogi-web.onrender.com')) {
+        return custom.replace(/\/+$/, '');
+      }
+      return '';
+    }
+
+    // Upload & Auto-Share
+    function uploadDirectly(blobOrFile, segments = [], customMediaId = null, creatorKey = null) {
+      if (!blobOrFile) {
+        alert('No se encontró el clip para subir.');
+        return;
+      }
+      if (blobOrFile.size && blobOrFile.size > 150 * 1024 * 1024) {
+        alert('El video supera el límite de 150 MB permitido. Por favor elige o recorta un video más pequeño.');
+        return;
+      }
+      document.getElementById('uploadDrawer').style.display = 'flex';
+      displaySessionAdIn('adUploadProgress');
+      const fill = document.getElementById('uploadFill');
+      const percent = document.getElementById('uploadPercent');
+      fill.style.width = '0%';
+      percent.innerText = '0%';
+
+      const formData = new FormData();
+      const ext = (blobOrFile.name && blobOrFile.name.endsWith('.mp4')) || (blobOrFile.type && blobOrFile.type.includes('mp4')) ? 'mp4' : 'webm';
+      formData.append('media', blobOrFile, `mogi_cam_${Date.now()}.${ext}`);
+      formData.append('ttlHours', '6');
+      const isRec = Boolean(blobOrFile && blobOrFile._isRecorded);
+      formData.append('isRecorded', isRec ? 'true' : 'false');
+
+      if (customMediaId) {
+        formData.append('customMediaId', customMediaId);
+      }
+      if (creatorKey) {
+        formData.append('creatorKey', creatorKey);
+      }
+      
+      // Pass Multi-Segment or Single Trim payload
+      if (Array.isArray(segments) && segments.length > 0) {
+        formData.append('segments', JSON.stringify(segments));
+        const totalCutSecs = segments.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0);
+        formData.append('clipDuration', totalCutSecs.toFixed(2));
+      } else {
+        const finalDur = (blobOrFile && blobOrFile._knownDuration) || pendingVideoDuration || 0;
+        formData.append('clipDuration', finalDur.toString());
+      }
+
+      // Exact Video Dimensions (Width & Height)
+      const vPrevApp = document.getElementById('trimmerVideoPreview');
+      const measuredAppW = (vPrevApp && vPrevApp.videoWidth) ? vPrevApp.videoWidth : ((blobOrFile && blobOrFile._videoWidth) || 720);
+      const measuredAppH = (vPrevApp && vPrevApp.videoHeight) ? vPrevApp.videoHeight : ((blobOrFile && blobOrFile._videoHeight) || 1280);
+      formData.append('clipWidth', measuredAppW.toString());
+      formData.append('clipHeight', measuredAppH.toString());
+
+      // Privacy Settings
+      formData.append('privacyActive', isExtraPrivacy ? 'true' : 'false');
+      formData.append('maxViews', document.getElementById('appMaxViews')?.value || '0');
+      formData.append('singleViewPerDevice', document.getElementById('appSingleViewPerDevice')?.checked ? 'true' : 'false');
+      formData.append('uniqueDevicesOnly', document.getElementById('appUniqueDevices')?.checked ? 'true' : 'false');
+      formData.append('lockDevice', document.getElementById('appLockDevice')?.checked ? 'true' : 'false');
+      formData.append('singleSession', document.getElementById('appSingleSession')?.checked ? 'true' : 'false');
+      formData.append('singlePlayPerVisit', document.getElementById('appSinglePlayPerVisit')?.checked ? 'true' : 'false');
+      formData.append('mobileOnly', document.getElementById('appMobileOnly')?.checked ? 'true' : 'false');
+      const isWmMoving = document.getElementById('appWatermarkMoving')?.checked || false;
+      formData.append('watermarkEnabled', isWmMoving ? 'true' : 'false');
+      formData.append('watermarkMoving', isWmMoving ? 'true' : 'false');
+      formData.append('watermarkIncludeIp', document.getElementById('appWmIp')?.checked ? 'true' : 'false');
+      formData.append('watermarkIncludeDevice', document.getElementById('appWmDevice')?.checked ? 'true' : 'false');
+      formData.append('watermarkIncludeCustom', document.getElementById('appWmCustom')?.checked ? 'true' : 'false');
+      formData.append('customWatermarkText', document.getElementById('appCustomWatermarkInput')?.value || '');
+
+      if (currentDiscordSession) {
+        formData.append('discordSession', currentDiscordSession);
+      }
+
+      const getAppLang = () => (typeof currentAppLang !== 'undefined' && currentAppLang) ? currentAppLang : 'es';
+      const upText = (p) => {
+        const l = getAppLang();
+        if (p >= 100) {
+          if (l === 'en') return '100% • Finalizing...';
+          if (l === 'pt') return '100% • Finalizando...';
+          if (l === 'fr') return '100% • Finalisation...';
+          if (l === 'de') return '100% • Fertigstellen...';
+          if (l === 'ja') return '100% • 完了中...';
+          return '100% • Finalizando...';
+        }
+        if (l === 'en') return `Uploading ${p}%`;
+        if (l === 'pt') return `Enviando ${p}%`;
+        if (l === 'fr') return `Téléversement ${p}%`;
+        if (l === 'de') return `Hochladen ${p}%`;
+        if (l === 'ja') return `アップロード中 ${p}%`;
+        return `Subiendo ${p}%`;
+      };
+
+      const apiBase = getApiBaseUrl();
+      const uploadUrl = apiBase ? `${apiBase}/api/upload` : '/api/upload';
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadUrl, true);
+      xhr.timeout = 120000; // 2 minutes timeout for mobile networks
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const p = Math.round((e.loaded / e.total) * 100);
+          fill.style.width = `${p}%`;
+          percent.innerText = upText(p);
+        }
+      };
+
+      xhr.onload = () => {
+        document.getElementById('uploadDrawer').style.display = 'none';
+        if (xhr.status === 200) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            let finalUrl = data.shareUrl || '';
+            if (finalUrl.startsWith('/')) {
+              finalUrl = `${apiBase || window.location.origin}${finalUrl}`;
+            }
+            lastGeneratedShareUrl = finalUrl;
+            showShareReadyDrawer(finalUrl);
+          } catch(e) {
+            alert('Error al procesar respuesta del servidor.');
+          }
+        } else {
+          alert('Error al subir video (' + xhr.status + '). Verifica tu conexión.');
+        }
+      };
+
+      xhr.ontimeout = () => {
+        document.getElementById('uploadDrawer').style.display = 'none';
+        alert('Tiempo de espera agotado al subir el video.');
+      };
+
+      xhr.onerror = () => {
+        document.getElementById('uploadDrawer').style.display = 'none';
+        alert('Error de conexión al subir. Verifica que el servidor esté activo.');
+      };
+
+      try {
+        xhr.send(formData);
+      } catch(err) {
+        document.getElementById('uploadDrawer').style.display = 'none';
+        alert('Error al iniciar la subida: ' + err.message);
+      }
+    }
+
+    // Trigger Mobile Native Share Sheet
+    function showShareReadyDrawer(url) {
+      document.getElementById('readyShareUrlText').innerText = url;
+      const dcNotice = document.getElementById('discordShareNotice');
+      if (dcNotice) dcNotice.style.display = currentDiscordSession ? 'block' : 'none';
+      document.getElementById('shareDrawer').style.display = 'flex';
+      displaySessionAdIn('adShareDrawer');
+
+      try {
+        navigator.clipboard.writeText(url);
+      } catch(e){}
+
+      triggerNativeShare();
+    }
+
+    async function triggerNativeShare() {
+      const shareData = {
+        url: lastGeneratedShareUrl
+      };
+
+      if (navigator.share) {
+        try {
+          await navigator.share(shareData);
+        } catch (err) {
+          console.log('Share dismissed or cancelled:', err);
+        }
+      } else {
+        try {
+          await navigator.clipboard.writeText(lastGeneratedShareUrl);
+          alert('¡Enlace copiado al portapapeles! Puedes pegarlo en cualquier aplicación.');
+        } catch(e){}
+      }
+    }
+
+    function copyReadyShareUrl() {
+      if (lastGeneratedShareUrl) {
+        navigator.clipboard.writeText(lastGeneratedShareUrl);
+        alert('¡Enlace copiado!');
+      }
+    }
+
+    function resetCameraForAnother() {
+      document.getElementById('shareDrawer').style.display = 'none';
+      resetSessionAd();
+      if (currentDiscordSession) {
+        try { sessionStorage.removeItem('mogi_app_discord_session'); } catch(e){}
+        currentDiscordSession = null;
+        const url = new URL(window.location.href);
+        url.searchParams.delete('session');
+        window.location.href = url.pathname + (url.search ? url.search : '');
+        return;
+      }
+      startCamera();
+    }
+
+    // App Internationalization & Onboarding Engine (All 6 Languages)
+    // Shared Internationalization loaded from /i18n.js
+    const i18nApp = window.i18nApp;
+
+    let currentAppLang = 'en';
+
+    function setAppLanguage(lang) {
+      currentAppLang = lang || 'en';
+      const dict = i18nApp[currentAppLang] || i18nApp.en;
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) {
+          if (dict[key].includes('<br>')) {
+            el.innerHTML = dict[key];
+          } else {
+            el.innerText = dict[key];
+          }
+        }
+      });
+      document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+        const key = el.getAttribute('data-i18n-ph');
+        if (dict[key]) el.placeholder = dict[key];
+      });
+      const s1 = document.getElementById('appSettingsLangSelect');
+      if (s1) s1.value = currentAppLang;
+      const s2 = document.getElementById('appOnboardLangSelect');
+      if (s2) s2.value = currentAppLang;
+      resetSessionAd();
+      document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        if (dict[key]) el.title = dict[key];
+      });
+
+      // Synchronize both language dropdowns
+      const onboardSel = document.getElementById('appOnboardLangSelect');
+      if (onboardSel) onboardSel.value = lang;
+      const settingsSel = document.getElementById('appSettingsLangSelect');
+      if (settingsSel) settingsSel.value = lang;
+
+      // Update dynamic labels
+      const menuProf = document.getElementById('menuProfileLabel');
+      if (menuProf) {
+        menuProf.innerText = (qualityPreset === 'quality') ? (dict.profile_quality_label || '720p Calidad (3 min)') : (dict.profile_fast_label || '720p Rápido (6 min)');
+      }
+      const menuMic = document.getElementById('menuMicLabel');
+      if (menuMic) {
+        menuMic.innerText = isMicMuted ? (dict.mic_muted_label || 'Audio Silenciado') : (dict.mic_active_label || 'Audio Activo');
+      }
+
+      const trimMax = document.getElementById('trimmerMaxLabel');
+      if (trimMax) {
+        const mins = (qualityPreset === 'quality') ? 3 : 6;
+        const minWordMap = {
+          es: `${mins} minutos`,
+          en: `${mins} minutes`,
+          pt: `${mins} minutos`,
+          fr: `${mins} minutes`,
+          de: `${mins} Minuten`,
+          ja: `${mins}分`
+        };
+        trimMax.innerText = minWordMap[currentAppLang] || `${mins} minutes`;
+      }
+
+      // If trimmer drawer is open or has active segments, update dynamic labels
+      const drawer = document.getElementById('trimmerDrawer');
+      if (drawer && drawer.style.display === 'flex') {
+        const btnIcon = document.getElementById('btnConfirmIcon');
+        const btnText = document.getElementById('btnConfirmText');
+        if (currentDiscordSession) {
+          if (btnIcon) btnIcon.innerText = '📤';
+          const dcConfirmMap = {
+            es: 'Confirmar y Compartir en Discord',
+            en: 'Confirm & Share to Discord',
+            pt: 'Confirmar e Compartilhar no Discord',
+            fr: 'Confirmer et Partager sur Discord',
+            de: 'Bestätigen und auf Discord teilen',
+            ja: '確定してDiscordに共有'
+          };
+          if (btnText) btnText.innerText = dcConfirmMap[currentAppLang] || dcConfirmMap.en;
+        } else {
+          if (btnIcon) btnIcon.innerText = '🚀';
+          const uploadConfirmMap = {
+            es: 'Confirmar y Subir',
+            en: 'Confirm & Upload',
+            pt: 'Confirmar e Enviar',
+            fr: 'Confirmer et Téléverser',
+            de: 'Bestätigen und Hochladen',
+            ja: '確定してアップロード'
+          };
+          if (btnText) btnText.innerText = uploadConfirmMap[currentAppLang] || uploadConfirmMap.en;
+        }
+        updateActiveSliceUI();
+        updateTotalTrimDurationBadge();
+      }
+
+      try { localStorage.setItem('mogi_app_lang', lang); } catch(e){}
+    }
+
+    function openAppOnboardingModal() {
+      const m = document.getElementById('onboardingModal');
+      if (m) m.style.display = 'flex';
+    }
+
+    function closeAppOnboardingModal() {
+      const m = document.getElementById('onboardingModal');
+      if (m) m.style.display = 'none';
+      try { localStorage.setItem('mogi_onboard_seen', '1'); } catch(e){}
+    }
+
+    let selectedAppOnboardProfile = 'fast';
+
+    function highlightAppOnboardingProfile(profile) {
+      selectedAppOnboardProfile = profile;
+      const cardFast = document.getElementById('appOnboardCardFast');
+      const cardQual = document.getElementById('appOnboardCardQuality');
+      if (cardFast && cardQual) {
+        if (profile === 'quality') {
+          cardQual.style.borderColor = '#a855f7';
+          cardQual.style.background = 'rgba(168, 85, 247, 0.22)';
+          cardFast.style.borderColor = 'rgba(255, 109, 0, 0.3)';
+          cardFast.style.background = 'rgba(255, 109, 0, 0.05)';
+        } else {
+          cardFast.style.borderColor = '#ff7b00';
+          cardFast.style.background = 'rgba(255, 109, 0, 0.18)';
+          cardQual.style.borderColor = 'rgba(168, 85, 247, 0.3)';
+          cardQual.style.background = 'rgba(168, 85, 247, 0.05)';
+        }
+      }
+    }
+
+    async function confirmAppOnboardingModal() {
+      setQualityPresetMode(selectedAppOnboardProfile);
+      closeAppOnboardingModal();
+      try {
+        if (!appMicStream || !appMicStream.getAudioTracks().some(t => t.readyState === 'live')) {
+          await ensureAppAudioGraph();
+        }
+      } catch(e){}
+    }
+
+    // Boot
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        const savedLang = localStorage.getItem('mogi_app_lang');
+        setAppLanguage(savedLang || 'en');
+
+        const savedAlwaysTrim = localStorage.getItem('mogi_app_always_trim');
+        const chkAlways = document.getElementById('appAlwaysTrim');
+        if (chkAlways) {
+          chkAlways.checked = (savedAlwaysTrim !== null) ? (savedAlwaysTrim === '1') : false;
+        }
+
+        const maxViews = localStorage.getItem('mogi_app_max_views');
+        if (maxViews !== null) {
+          const inp = document.getElementById('appMaxViews');
+          if (inp) inp.value = maxViews;
+        }
+
+        const uniq = localStorage.getItem('mogi_app_unique_devices');
+        if (uniq !== null) {
+          const chk = document.getElementById('appUniqueDevices');
+          if (chk) chk.checked = (uniq === '1');
+        }
+
+        const lock = localStorage.getItem('mogi_app_lock_device');
+        if (lock !== null) {
+          const chk = document.getElementById('appLockDevice');
+          if (chk) chk.checked = (lock === '1');
+        }
+
+        const singleS = localStorage.getItem('mogi_app_single_session');
+        if (singleS !== null) {
+          const chk = document.getElementById('appSingleSession');
+          if (chk) chk.checked = (singleS === '1');
+        }
+
+        const mobO = localStorage.getItem('mogi_app_mobile_only');
+        if (mobO !== null) {
+          const chk = document.getElementById('appMobileOnly');
+          if (chk) chk.checked = (mobO === '1');
+        }
+
+        const singleP = localStorage.getItem('mogi_app_single_play');
+        if (singleP !== null) {
+          const chk = document.getElementById('appSinglePlayPerVisit');
+          if (chk) chk.checked = (singleP === '1');
+        }
+
+        const wmMov = localStorage.getItem('mogi_app_wm_moving');
+        const isWmMoving = (wmMov === '1'); // false / disabled by default
+        const chkWmMov = document.getElementById('appWatermarkMoving');
+        if (chkWmMov) chkWmMov.checked = isWmMoving;
+        toggleAppWatermarkSubSettings(isWmMoving);
+
+        const wmIp = localStorage.getItem('mogi_app_wm_ip');
+        if (wmIp !== null) {
+          const chk = document.getElementById('appWmIp');
+          if (chk) chk.checked = (wmIp === '1');
+        }
+
+        const wmDev = localStorage.getItem('mogi_app_wm_device');
+        if (wmDev !== null) {
+          const chk = document.getElementById('appWmDevice');
+          if (chk) chk.checked = (wmDev === '1');
+        }
+
+        const wmCust = localStorage.getItem('mogi_app_wm_custom');
+        if (wmCust !== null) {
+          const isCust = (wmCust === '1');
+          const chk = document.getElementById('appWmCustom');
+          if (chk) chk.checked = isCust;
+          const inp = document.getElementById('appCustomWatermarkInput');
+          if (inp) inp.disabled = !isCust;
+        }
+
+        const customWmTxt = localStorage.getItem('mogi_app_custom_wm_text');
+        if (customWmTxt !== null) {
+          const inp = document.getElementById('appCustomWatermarkInput');
+          if (inp) inp.value = customWmTxt;
+        }
+
+        const onboardSeen = localStorage.getItem('mogi_onboard_seen');
+        if (!onboardSeen) {
+          openAppOnboardingModal();
+        }
+
+        // Discord Bot Session and Preset URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionParam = urlParams.get('session');
+        if (sessionParam) {
+          currentDiscordSession = sessionParam;
+          try { sessionStorage.setItem('mogi_app_discord_session', sessionParam); } catch(e){}
+          showDiscordSessionToast(true);
+        } else {
+          try {
+            const savedSession = sessionStorage.getItem('mogi_app_discord_session');
+            if (savedSession) {
+              currentDiscordSession = savedSession;
+              showDiscordSessionToast(true);
+            }
+          } catch(e){}
+        }
+        const presetParam = urlParams.get('preset');
+        if (presetParam === 'quality' || presetParam === 'fast') {
+          setQualityPresetMode(presetParam);
+        } else {
+          setQualityPresetMode('fast');
+        }
+        const privacyParam = urlParams.get('privacy');
+        if (privacyParam === '1' && !isExtraPrivacy) {
+          toggleExtraPrivacyMode();
+        }
+      } catch(e){}
+
+      try { sessionStorage.removeItem('mogi_pwa_dismissed'); } catch(e){}
+      initVisitTracking('webapp');
+      checkSystemAnnouncement();
+      setTimeout(() => { checkPwaPrompt(); }, 1200);
+      startCamera();
+    });
+
+    // Global System Announcement Modal Logic
+    let currentAnnouncementId = null;
+
+    async function checkSystemAnnouncement() {
+      try {
+        let onboardSeen = false;
+        try {
+          onboardSeen = (localStorage.getItem('mogi_onboard_seen') === '1' || localStorage.getItem('mogi_onboard_seen') === 'true');
+        } catch(e){}
+        // ONLY show announcement if user has already seen onboarding previously!
+        if (!onboardSeen) return;
+
+        const langParam = (typeof currentLang !== 'undefined' && currentLang) ? currentLang : 'es';
+        const res = await fetch(`/api/announcement?lang=${encodeURIComponent(langParam)}`);
+        if (!res.ok) return;
+        const ann = await res.json();
+        if (!ann || !ann.active || !ann.id) return;
+
+        const dismissedId = localStorage.getItem('mogi_dismissed_announcement');
+        if (dismissedId === ann.id) return;
+
+        currentAnnouncementId = ann.id;
+        document.getElementById('annModalTitle').innerText = ann.title || 'Novedad de Zylo';
+        document.getElementById('annModalMessage').innerText = ann.message || '';
+
+        const mediaCont = document.getElementById('annModalMediaContainer');
+        if (ann.mediaUrl) {
+          mediaCont.style.display = 'flex';
+          const isVid = ann.mediaUrl.match(/\.(mp4|webm)($|\?)/i);
+          if (isVid) {
+            mediaCont.innerHTML = `<video src="${ann.mediaUrl}" controls autoplay loop muted playsinline style="width:100%; max-height:220px; object-fit:contain;"></video>`;
+          } else {
+            mediaCont.innerHTML = `<img src="${ann.mediaUrl}" style="width:100%; max-height:220px; object-fit:contain;" />`;
+          }
+        } else {
+          mediaCont.style.display = 'none';
+          mediaCont.innerHTML = '';
+        }
+
+        const actionBtn = document.getElementById('annModalActionBtn');
+        if (ann.actionUrl && ann.actionText) {
+          actionBtn.style.display = 'inline-block';
+          actionBtn.innerText = ann.actionText;
+          actionBtn.href = ann.actionUrl;
+          actionBtn.onclick = () => {
+            closeSystemAnnouncementModal();
+          };
+        } else {
+          actionBtn.style.display = 'none';
+        }
+
+        const modal = document.getElementById('systemAnnouncementModal');
+        if (modal) modal.style.display = 'flex';
+      } catch(e) {
+        console.warn('Announcement check error:', e);
+      }
+    }
+
+    function closeSystemAnnouncementModal() {
+      if (currentAnnouncementId) {
+        try {
+          localStorage.setItem('mogi_dismissed_announcement', currentAnnouncementId);
+        } catch(e) {}
+      }
+      const modal = document.getElementById('systemAnnouncementModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function initVisitTracking(pageType) {
+      try {
+        let isNew = false;
+        if (!localStorage.getItem('mogi_visitor_seen')) {
+          isNew = true;
+          localStorage.setItem('mogi_visitor_seen', Date.now().toString());
+        }
+        fetch('/api/stats/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: pageType, isNew })
+        }).catch(() => {});
+      } catch(e) {}
+    }
+  </script>
+<script src="/local_encoder.js"></script>
+</body>
+</html>

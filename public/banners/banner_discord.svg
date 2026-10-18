@@ -1,0 +1,57 @@
+<svg width="160" height="600" viewBox="0 0 160 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#180b33"/>
+      <stop offset="50%" stop-color="#2c1256"/>
+      <stop offset="100%" stop-color="#0e041d"/>
+    </linearGradient>
+    <linearGradient id="neonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7289da"/>
+      <stop offset="100%" stop-color="#5865F2"/>
+    </linearGradient>
+    <linearGradient id="btnGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff7b00"/>
+      <stop offset="100%" stop-color="#ffa726"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="160" height="600" rx="16" fill="url(#bgGrad)" stroke="#3f156d" stroke-width="1.5"/>
+
+  <!-- Top Badge -->
+  <rect x="20" y="24" width="120" height="26" rx="13" fill="rgba(88,101,242,0.2)" stroke="#5865F2" stroke-width="1"/>
+  <text x="80" y="41" fill="#c7d2fe" font-size="10" font-weight="bold" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">DISCORD BOT</text>
+
+  <!-- Discord Mascot Icon / Graphics -->
+  <circle cx="80" cy="115" r="38" fill="url(#neonGrad)"/>
+  <path d="M63 119c3-4 8-4 8-4s1 2 1 3c-4 1-6 3-6 3 3-2 8-3 14-3s11 1 14 3c0 0-2-2-6-3 0-1 1-3 1-3s5 0 8 4c2 7-1 16-1 16s-4 4-9 4l-2-3c3-1 4-3 4-3-6 4-13 4-19 0 0 0 1 2 4 3l-2 3c-5 0-9-4-9-4s-3-9-1-16zm9 6c-2 0-3 2-3 3s1 3 3 3 3-2 3-3-1-3-3-3zm16 0c-2 0-3 2-3 3s1 3 3 3 3-2 3-3-1-3-3-3z" fill="#ffffff" transform="scale(1.2) translate(-17, -25)"/>
+
+  <!-- Headline -->
+  <text x="80" y="195" fill="#ffffff" font-size="15" font-weight="900" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">¡Clips en tu</text>
+  <text x="80" y="215" fill="#a5b4fc" font-size="15" font-weight="900" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Servidor!</text>
+
+  <!-- Features list -->
+  <circle cx="28" cy="270" r="4" fill="#ff7b00"/>
+  <text x="40" y="274" fill="#e2e8f0" font-size="11" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, sans-serif">Comando /clip</text>
+
+  <circle cx="28" cy="305" r="4" fill="#ff7b00"/>
+  <text x="40" y="309" fill="#e2e8f0" font-size="11" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, sans-serif">Envío Automático</text>
+
+  <circle cx="28" cy="340" r="4" fill="#ff7b00"/>
+  <text x="40" y="344" fill="#e2e8f0" font-size="11" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, sans-serif">Autodestrucción</text>
+
+  <circle cx="28" cy="375" r="4" fill="#ff7b00"/>
+  <text x="40" y="379" fill="#e2e8f0" font-size="11" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, sans-serif">Cero Lag en Juego</text>
+
+  <!-- Decorative Separator -->
+  <line x1="25" y1="420" x2="135" y2="420" stroke="#360d62" stroke-width="1"/>
+
+  <text x="80" y="450" fill="#94a3b8" font-size="10" font-weight="500" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Disponible gratis</text>
+  <text x="80" y="468" fill="#94a3b8" font-size="10" font-weight="500" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">para tu comunidad</text>
+
+  <!-- Action Button -->
+  <g cursor="pointer">
+    <rect x="20" y="515" width="120" height="42" rx="10" fill="url(#btnGrad)"/>
+    <text x="80" y="541" fill="#070110" font-size="12" font-weight="800" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">USAR BOT</text>
+  </g>
+</svg>

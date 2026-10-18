@@ -1,0 +1,35 @@
+<svg width="320" height="80" viewBox="0 0 320 80" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mobBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#190733"/>
+      <stop offset="50%" stop-color="#2a0d54"/>
+      <stop offset="100%" stop-color="#120424"/>
+    </linearGradient>
+    <linearGradient id="mobFire" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff9100"/>
+      <stop offset="100%" stop-color="#ff3d00"/>
+    </linearGradient>
+    <linearGradient id="mobBtn" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="320" height="80" rx="14" fill="url(#mobBgGrad)" stroke="#431478" stroke-width="1.5"/>
+
+  <!-- Left Icon Circle -->
+  <circle cx="44" cy="40" r="24" fill="url(#mobFire)"/>
+  <text x="44" y="48" fill="#ffffff" font-size="22" text-anchor="middle">⚡</text>
+
+  <!-- Middle Content -->
+  <text x="80" y="32" fill="#ffffff" font-size="13" font-weight="900" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">MOGI STUDIO PRO</text>
+  <text x="80" y="48" fill="#ffa726" font-size="10.5" font-weight="700" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">✂️ Recorte Rápido Lossless • 0s Render</text>
+  <text x="80" y="62" fill="#cbd5e1" font-size="9.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">Autodestrucción 6h • Sin marcas molestas</text>
+
+  <!-- Right Pill Button -->
+  <g cursor="pointer">
+    <rect x="238" y="25" width="70" height="30" rx="9" fill="url(#mobBtn)"/>
+    <text x="273" y="44" fill="#ffffff" font-size="10" font-weight="800" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" text-anchor="middle">VER MÁS</text>
+  </g>
+</svg>

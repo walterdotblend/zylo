@@ -1,0 +1,28 @@
+{
+  "name": "zylo",
+  "version": "1.0.0",
+  "description": "Zylo (zylo.stream) - Instant clip recorder, video trimmer & sharing with zero server load and direct Cloudflare R2 delivery",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "cors": "^2.8.5",
+    "discord.js": "^14.27.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "geoip-lite": "^2.0.3",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "nanoid": "^5.0.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "type": "module"
+}

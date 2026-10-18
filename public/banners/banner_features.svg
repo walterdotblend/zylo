@@ -1,0 +1,57 @@
+<svg width="160" height="600" viewBox="0 0 160 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradL" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#180b33"/>
+      <stop offset="50%" stop-color="#240c49"/>
+      <stop offset="100%" stop-color="#0e041d"/>
+    </linearGradient>
+    <linearGradient id="fireGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff9100"/>
+      <stop offset="100%" stop-color="#ff3d00"/>
+    </linearGradient>
+    <linearGradient id="btnGradL" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9333ea"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="160" height="600" rx="16" fill="url(#bgGradL)" stroke="#3f156d" stroke-width="1.5"/>
+
+  <!-- Top Badge -->
+  <rect x="20" y="24" width="120" height="26" rx="13" fill="rgba(255,109,0,0.18)" stroke="#ff7b00" stroke-width="1"/>
+  <text x="80" y="41" fill="#fed7aa" font-size="10" font-weight="bold" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">⚡ MOGI STUDIO</text>
+
+  <!-- Feature Icon -->
+  <circle cx="80" cy="115" r="38" fill="url(#fireGrad)"/>
+  <text x="80" y="128" fill="#ffffff" font-size="34" text-anchor="middle">✂️</text>
+
+  <!-- Headline -->
+  <text x="80" y="195" fill="#ffffff" font-size="15" font-weight="900" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Recorte</text>
+  <text x="80" y="215" fill="#ffa726" font-size="15" font-weight="900" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Lossless</text>
+
+  <!-- Features list -->
+  <circle cx="28" cy="270" r="4" fill="#a855f7"/>
+  <text x="40" y="274" fill="#e2e8f0" font-size="11" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, sans-serif">0s de Render</text>
+
+  <circle cx="28" cy="305" r="4" fill="#a855f7"/>
+  <text x="40" y="309" fill="#e2e8f0" font-size="11" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, sans-serif">Multi-Recorte</text>
+
+  <circle cx="28" cy="340" r="4" fill="#a855f7"/>
+  <text x="40" y="344" fill="#e2e8f0" font-size="11" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, sans-serif">Marca Forense 👁️</text>
+
+  <circle cx="28" cy="375" r="4" fill="#a855f7"/>
+  <text x="40" y="379" fill="#e2e8f0" font-size="11" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, sans-serif">Caduca en 6h</text>
+
+  <!-- Decorative Separator -->
+  <line x1="25" y1="420" x2="135" y2="420" stroke="#360d62" stroke-width="1"/>
+
+  <text x="80" y="450" fill="#94a3b8" font-size="10" font-weight="500" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Sin cuentas ni apps</text>
+  <text x="80" y="468" fill="#94a3b8" font-size="10" font-weight="500" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Directo en tu navegador</text>
+
+  <!-- Action Button -->
+  <g cursor="pointer">
+    <rect x="20" y="515" width="120" height="42" rx="10" fill="url(#btnGradL)"/>
+    <text x="80" y="541" fill="#ffffff" font-size="11" font-weight="800" font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">GRABAR AHORA</text>
+  </g>
+</svg>

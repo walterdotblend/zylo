@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: zylo
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BASE_URL
+        value: https://zylo.stream
+      - key: R2_PUBLIC_URL
+        value: https://pub-89cc7f23900d4c61beba3ac77dd1959a.r2.dev
